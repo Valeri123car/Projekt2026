@@ -44,6 +44,13 @@ await app.register(import("./routes/stranke.js"), {
 await app.register(import("./routes/vozila.js"), { prefix: "/api/v1/vozila" });
 await app.register(import("./routes/admin.js"), { prefix: "/api/v1/admin" });
 await app.register(import("./routes/racuni.js"), { prefix: "/api/v1/racuni" });
+await app.register(import("./routes/tipi_vozil.js"), {
+  prefix: "/api/v1/tipi-vozil",
+});
+await app.register(import("./routes/log_voznja.js"), { prefix: "/api/v1/log" });
+await app.register(import("./routes/urna_postavka.js"), {
+  prefix: "/api/v1/urna-postavka",
+});
 
 app.get("/health", async () => ({ status: "ok" }));
 
