@@ -37,6 +37,13 @@ app.decorate("authenticate", async (request, reply) => {
 await app.register(import("./plugins/prisma.js"));
 await app.register(import("./routes/auth.js"), { prefix: "/api/v1/auth" });
 await app.register(import("./routes/voznje.js"), { prefix: "/api/v1/voznje" });
+await app.register(import("./routes/urnik.js"), { prefix: "/api/v1/urnik" });
+await app.register(import("./routes/stranke.js"), {
+  prefix: "/api/v1/stranke",
+});
+await app.register(import("./routes/vozila.js"), { prefix: "/api/v1/vozila" });
+await app.register(import("./routes/admin.js"), { prefix: "/api/v1/admin" });
+await app.register(import("./routes/racuni.js"), { prefix: "/api/v1/racuni" });
 
 app.get("/health", async () => ({ status: "ok" }));
 

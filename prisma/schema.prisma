@@ -66,6 +66,7 @@ model Vozilo {
   @@index([fk_tip_vozila])
 }
 
+//TODO: dodaj polje za fizično oz pravo stranko, da bomo lahko ločili med fizičnimi in pravnimi strankami
 model Stranka {
   id_stranka Int     @id @default(autoincrement())
   naziv      String  @db.VarChar(45)
