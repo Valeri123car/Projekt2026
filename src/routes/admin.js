@@ -106,7 +106,7 @@ export default async function admin(app) {
       },
     },
     async (request, reply) => {
-      const { ime, priimek, email, geslo, dostop } = request.body;
+      const { ime, priimek, email, geslo, dostop, emso } = request.body;
       const bcrypt = await import("bcryptjs");
 
       const obstaja = await app.prisma.uporabnik.findUnique({
