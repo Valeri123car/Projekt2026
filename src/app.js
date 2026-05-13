@@ -4,6 +4,7 @@ import jwt from "@fastify/jwt";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import rateLimit from "@fastify/rate-limit";
+import basicAuth from "@fastify/basic-auth";
 
 const app = Fastify({ logger: true });
 
@@ -35,8 +36,23 @@ await app.register(swagger, {
   },
 });
 
+await app.register(basicAuth, {
+  validate: async (username, password) => {
+    if (
+      username !== process.env.DOCS_USER ||
+      password !== process.env.DOCS_PASS
+    ) {
+      return new Error("Napačno geslo");
+    }
+  },
+  authenticate: true,
+});
+
 await app.register(swaggerUi, {
   routePrefix: "/docs",
+  uiHooks: {
+    onRequest: app.basicAuth,
+  },
 });
 
 app.decorate("authenticate", async (request, reply) => {
