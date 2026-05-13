@@ -16,18 +16,20 @@ model UrnaPostavka {
 }
 
 model Uporabnik {
-  id_uporabnik Int           @id @default(autoincrement())
-  ime          String        @db.VarChar(45)
-  priimek      String        @db.VarChar(45)
-  emso_crypted String?       @db.VarChar(255)
-  dostop       Int           @default(1)
-  email        String        @unique @db.VarChar(100)
-  geslo        String        @db.VarChar(255)
-  fk_postavka  Int?
-  postavka     UrnaPostavka? @relation(fields: [fk_postavka], references: [id_postavka])
-  voznje       Voznja[]
-  urniki       Urnik[]
-  racuni       Racun[]
+  id_uporabnik  Int           @id @default(autoincrement())
+  ime           String        @db.VarChar(45)
+  priimek       String        @db.VarChar(45)
+  emso_crypted  String?       @db.VarChar(255)
+  dostop        Int           @default(1)
+  email         String        @unique @db.VarChar(100)
+  geslo         String        @db.VarChar(255)
+  fk_postavka   Int?
+  postavka      UrnaPostavka? @relation(fields: [fk_postavka], references: [id_postavka])
+  voznje        Voznja[]
+  urniki        Urnik[]
+  racuni        Racun[]
+  gdpr_soglasje Boolean       @default(false)
+  gdpr_datum    DateTime?
 
   @@index([fk_postavka])
 }

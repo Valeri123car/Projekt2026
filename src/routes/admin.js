@@ -100,6 +100,7 @@ export default async function admin(app) {
             email: { type: "string", format: "email" },
             geslo: { type: "string", minLength: 6 },
             dostop: { type: "integer", enum: [1, 2, 3] },
+            emso: { type: "string" },
           },
         },
       },
@@ -118,7 +119,14 @@ export default async function admin(app) {
       const hash = await bcrypt.default.hash(geslo, 12);
 
       const nov = await app.prisma.uporabnik.create({
-        data: { ime, priimek, email, geslo: hash, dostop },
+        data: {
+          ime,
+          priimek,
+          email,
+          geslo: hash,
+          dostop,
+          emso_crypted: emso ? app.encrypt(emso) : null,
+        },
       });
 
       return reply.code(201).send({
