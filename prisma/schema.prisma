@@ -1,0 +1,116 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model UrnaPostavka {
+  id_postavka Int         @id @default(autoincrement())
+  postavka    Float
+  users       Uporabnik[]
+
+  @@map("urna_postavka")
+}
+
+model Uporabnik {
+  id_uporabnik Int           @id @default(autoincrement())
+  ime          String        @db.VarChar(45)
+  priimek      String        @db.VarChar(45)
+  emso_crypted String?       @db.VarChar(255)
+  dostop       Int           @default(1)
+  email        String        @unique @db.VarChar(100)
+  geslo        String        @db.VarChar(255)
+  fk_postavka  Int?
+  postavka     UrnaPostavka? @relation(fields: [fk_postavka], references: [id_postavka])
+  voznje       Voznja[]
+  urniki       Urnik[]
+  racuni       Racun[]
+
+  @@index([fk_postavka])
+}
+
+model Voznja {
+  id_voznja       Int          @id @default(autoincrement())
+  datum           DateTime     @db.Date
+  zacetek         DateTime
+  konc            DateTime
+  trajanje        String?
+  fk_uporabnik    Int
+  timestamp_zapis DateTime?
+  uporabnik       Uporabnik    @relation(fields: [fk_uporabnik], references: [id_uporabnik])
+  logs            LOG_voznja[]
+
+  @@index([fk_uporabnik])
+}
+
+model TipVozila {
+  id_tip_vozila Int      @id @default(autoincrement())
+  naziv         String?  @db.VarChar(45)
+  vozila        Vozilo[]
+
+  @@map("tip_vozila")
+}
+
+model Vozilo {
+  id_vozilo     Int       @id @default(autoincrement())
+  registerska   String    @db.VarChar(45)
+  st_sedezev    Int
+  dolzina       Int?
+  fk_tip_vozila Int
+  tip_vozila    TipVozila @relation(fields: [fk_tip_vozila], references: [id_tip_vozila])
+  urniki        Urnik[]
+
+  @@index([fk_tip_vozila])
+}
+
+model Stranka {
+  id_stranka Int     @id @default(autoincrement())
+  naziv      String  @db.VarChar(45)
+  email      String? @db.VarChar(45)
+  telefonska String? @db.VarChar(45)
+  davcna_st  Int?
+  urniki     Urnik[]
+}
+
+model Urnik {
+  id_urnik     Int       @id @default(autoincrement())
+  datum        DateTime  @db.Date
+  cena         Float?
+  naziv        String?   @db.VarChar(45)
+  placano      Boolean   @default(false)
+  fk_vozilo    Int
+  fk_uporabnik Int
+  fk_stranka   Int
+  vozilo       Vozilo    @relation(fields: [fk_vozilo], references: [id_vozilo])
+  uporabnik    Uporabnik @relation(fields: [fk_uporabnik], references: [id_uporabnik])
+  stranka      Stranka   @relation(fields: [fk_stranka], references: [id_stranka])
+
+  @@index([fk_vozilo])
+  @@index([fk_uporabnik])
+  @@index([fk_stranka])
+}
+
+model LOG_voznja {
+  idLOG               Int      @id @default(autoincrement())
+  timestamp           DateTime
+  TYPE                String   @db.VarChar(45)
+  voznja_id_voznja    Int
+  voznja_fk_uporabnik Int
+  voznja              Voznja   @relation(fields: [voznja_id_voznja], references: [id_voznja])
+
+  @@index([voznja_id_voznja])
+}
+
+model Racun {
+  idRacun      Int       @id @default(autoincrement())
+  datum_izdaje DateTime  @db.Date
+  st_ur        Float
+  placa        Float
+  fk_uporabnik Int
+  uporabnik    Uporabnik @relation(fields: [fk_uporabnik], references: [id_uporabnik])
+
+  @@index([fk_uporabnik])
+}
