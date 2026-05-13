@@ -3,10 +3,23 @@ import cors from "@fastify/cors";
 import jwt from "@fastify/jwt";
 import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
+import rateLimit from "@fastify/rate-limit";
 
 const app = Fastify({ logger: true });
 
-await app.register(cors, { origin: true });
+await app.register(rateLimit, {
+  max: 100,
+  timeWindow: "1 minute",
+  keyGenerator: (request) => request.ip,
+});
+
+await app.register(cors, {
+  origin: [
+    "https://projekt2026.fly.dev",
+    "http://localhost:3000",
+    "http://localhost:19006",
+  ],
+});
 
 await app.register(jwt, {
   secret: process.env.JWT_SECRET || "dev_secret_zamenjaj",
@@ -35,6 +48,7 @@ app.decorate("authenticate", async (request, reply) => {
 });
 
 await app.register(import("./plugins/prisma.js"));
+await app.register(import("./plugins/crypto.js"));
 await app.register(import("./routes/auth.js"), { prefix: "/api/v1/auth" });
 await app.register(import("./routes/voznje.js"), { prefix: "/api/v1/voznje" });
 await app.register(import("./routes/urnik.js"), { prefix: "/api/v1/urnik" });
@@ -50,6 +64,9 @@ await app.register(import("./routes/tipi_vozil.js"), {
 await app.register(import("./routes/log_voznja.js"), { prefix: "/api/v1/log" });
 await app.register(import("./routes/urna_postavka.js"), {
   prefix: "/api/v1/urna-postavka",
+});
+await app.register(import("./routes/dashboard.js"), {
+  prefix: "/api/v1/dashboard",
 });
 
 app.get("/health", async () => ({ status: "ok" }));

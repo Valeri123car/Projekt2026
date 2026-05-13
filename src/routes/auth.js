@@ -4,6 +4,7 @@ export default async function auth(app) {
   app.post(
     "/login",
     {
+      config: { rateLimit: { max: 5, timeWindow: "1 minute" } },
       schema: {
         body: {
           type: "object",
@@ -31,11 +32,14 @@ export default async function auth(app) {
         return reply.code(401).send({ error: "Napačen email ali geslo" });
       }
 
-      const token = app.jwt.sign({
-        id: uporabnik.id_uporabnik,
-        email: uporabnik.email,
-        vloga: uporabnik.dostop,
-      });
+      const token = app.jwt.sign(
+        {
+          id: uporabnik.id_uporabnik,
+          email: uporabnik.email,
+          vloga: uporabnik.dostop,
+        },
+        { expiresIn: "8h" },
+      );
 
       return { token, vloga: uporabnik.dostop };
     },
