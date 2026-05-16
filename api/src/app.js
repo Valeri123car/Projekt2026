@@ -17,6 +17,7 @@ await app.register(rateLimit, {
 await app.register(cors, {
   origin: [
     "https://projekt2026.fly.dev",
+    "https://sirena-web.fly.dev",
     "http://localhost:3000",
     "http://localhost:5173",
     "http://localhost:19006",
