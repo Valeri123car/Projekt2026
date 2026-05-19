@@ -67,4 +67,30 @@ export default async function voznje(app) {
       return reply.code(201).send(voznja);
     },
   );
+
+  app.delete(
+    "/:id",
+    {
+      onRequest: [app.authenticate],
+    },
+    async (request, reply) => {
+      const id = parseInt(request.params.id);
+
+      const voznja = await app.prisma.voznja.findUnique({
+        where: { id_voznja: id },
+      });
+
+      if (!voznja) {
+        return reply.code(404).send({ error: "Vožnja ne obstaja" });
+      }
+
+      if (voznja.fk_uporabnik !== request.user.id && request.user.vloga !== 2) {
+        return reply.code(403).send({ error: "Dostop zavrnjen" });
+      }
+
+      await app.prisma.voznja.delete({ where: { id_voznja: id } });
+
+      return reply.code(204).send();
+    },
+  );
 }

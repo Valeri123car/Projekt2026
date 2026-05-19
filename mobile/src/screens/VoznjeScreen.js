@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Alert,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
 import api from "../api/client";
 import { useAuth } from "../hooks/useAuth";
 
@@ -19,7 +20,7 @@ export default function VoznjeScreen({ navigation }) {
   const [refreshing, setRefreshing] = useState(false);
   const { handleLogout } = useAuth();
 
-  const naloziVoznje = async () => {
+  const naloziVoznje = useCallback(async () => {
     try {
       const res = await api.get("/voznje");
       setVoznje(res.data);
@@ -28,11 +29,14 @@ export default function VoznjeScreen({ navigation }) {
       setLoading(false);
       setRefreshing(false);
     }
-  };
-
-  useEffect(() => {
-    naloziVoznje();
   }, []);
+
+  useFocusEffect(
+    useCallback(() => {
+      setLoading(true);
+      naloziVoznje();
+    }, [naloziVoznje]),
+  );
 
   if (loading) return <ActivityIndicator style={{ flex: 1 }} color="#0058be" />;
 
@@ -64,7 +68,12 @@ export default function VoznjeScreen({ navigation }) {
           />
         }
         renderItem={({ item }) => (
-          <View style={s.card}>
+          <TouchableOpacity
+            style={s.card}
+            onPress={() =>
+              navigation.navigate("VoznjaDetail", { voznja: item })
+            }
+          >
             <View style={s.cardLevo}>
               <MaterialCommunityIcons
                 name="truck-outline"
@@ -98,7 +107,7 @@ export default function VoznjeScreen({ navigation }) {
               size={20}
               color="#c2c6d6"
             />
-          </View>
+          </TouchableOpacity>
         )}
         ListEmptyComponent={
           <View style={s.prazno}>
@@ -114,9 +123,7 @@ export default function VoznjeScreen({ navigation }) {
 
       <TouchableOpacity
         style={s.fab}
-        onPress={() =>
-          Alert.alert("Kmalu", "Vnos vožnje pride v naslednji iteraciji.")
-        }
+        onPress={() => navigation.navigate("NovaVoznja")}
       >
         <MaterialCommunityIcons name="plus" size={28} color="#fff" />
       </TouchableOpacity>
