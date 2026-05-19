@@ -16,20 +16,21 @@ model UrnaPostavka {
 }
 
 model Uporabnik {
-  id_uporabnik  Int           @id @default(autoincrement())
-  ime           String        @db.VarChar(45)
-  priimek       String        @db.VarChar(45)
-  emso_crypted  String?       @db.VarChar(255)
-  dostop        Int           @default(1)
-  email         String        @unique @db.VarChar(100)
-  geslo         String        @db.VarChar(255)
-  fk_postavka   Int?
-  postavka      UrnaPostavka? @relation(fields: [fk_postavka], references: [id_postavka])
-  voznje        Voznja[]
-  urniki        Urnik[]
-  racuni        Racun[]
-  gdpr_soglasje Boolean       @default(false)
-  gdpr_datum    DateTime?
+  id_uporabnik    Int             @id @default(autoincrement())
+  ime             String          @db.VarChar(45)
+  priimek         String          @db.VarChar(45)
+  emso_crypted    String?         @db.VarChar(255)
+  dostop          Int             @default(1)
+  email           String          @unique @db.VarChar(100)
+  geslo           String          @db.VarChar(255)
+  fk_postavka     Int?
+  postavka        UrnaPostavka?   @relation(fields: [fk_postavka], references: [id_postavka])
+  voznje          Voznja[]
+  urniki          Urnik[]
+  racuni          Racun[]
+  gdpr_soglasje   Boolean         @default(false)
+  gdpr_datum      DateTime?
+  tahograf_zapisi TahografZapis[]
 
   @@index([fk_postavka])
 }
@@ -116,4 +117,21 @@ model Racun {
   uporabnik    Uporabnik @relation(fields: [fk_uporabnik], references: [id_uporabnik])
 
   @@index([fk_uporabnik])
+}
+
+model TahografZapis {
+  id_zapis        Int       @id @default(autoincrement())
+  fk_uporabnik    Int
+  stanje          String    @db.VarChar(20)
+  zacetek         DateTime
+  konec           DateTime?
+  trajanje_min    Int?
+  lokacija_zac    String?   @db.VarChar(100)
+  lokacija_kon    String?   @db.VarChar(100)
+  timestamp_zapis DateTime  @default(now())
+  uporabnik       Uporabnik @relation(fields: [fk_uporabnik], references: [id_uporabnik])
+
+  @@index([fk_uporabnik])
+  @@index([stanje])
+  @@map("tahograf_zapis")
 }

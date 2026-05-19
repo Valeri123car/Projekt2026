@@ -90,6 +90,9 @@ await app.register(import("./routes/urna_postavka.js"), {
 await app.register(import("./routes/dashboard.js"), {
   prefix: "/api/v1/dashboard",
 });
+await app.register(import("./routes/tahograf.js"), {
+  prefix: "/api/v1/tahograf",
+});
 
 app.get("/health", async () => ({ status: "ok" }));
 
