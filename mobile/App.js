@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useEffect } from "react";
+import { Alert } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Device from "expo-device";
 import LoginScreen from "./src/screens/LoginScreen";
 import VoznjeScreen from "./src/screens/VoznjeScreen";
 import NovaVoznjaScreen from "./src/screens/NovaVoznjaScreen";
 import TahografScreen from "./src/screens/TahografScreen";
-import useAuthStore from "./src/store/authStore";
 import VoznjaDetailScreen from "./src/screens/VoznjaDetailScreen";
+import useAuthStore from "./src/store/authStore";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -76,9 +78,21 @@ function MainTabs() {
 export default function App() {
   const { token, loadToken } = useAuthStore();
 
-  useState(() => {
+  useEffect(() => {
     loadToken();
+    preveriNapravo();
   }, []);
+
+  const preveriNapravo = async () => {
+    if (!Device.isDevice) return;
+    if (Device.osInternalBuildId?.includes("test-keys")) {
+      Alert.alert(
+        "Varnostno opozorilo",
+        "Naprava je rootana. Aplikacija morda ne bo delovala varno.",
+        [{ text: "Razumem" }],
+      );
+    }
+  };
 
   return (
     <NavigationContainer>

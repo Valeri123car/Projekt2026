@@ -127,4 +127,32 @@ export default async function auth(app) {
         .send({ message: "Vaši osebni podatki so bili anonimizirani" });
     },
   );
+
+  app.post(
+    "/refresh",
+    {
+      onRequest: [app.authenticate],
+      schema: { description: "Obnovi JWT token" },
+    },
+    async (request, reply) => {
+      const uporabnik = await app.prisma.uporabnik.findUnique({
+        where: { id_uporabnik: request.user.id },
+      });
+
+      if (!uporabnik) {
+        return reply.code(404).send({ error: "Uporabnik ne obstaja" });
+      }
+
+      const token = app.jwt.sign(
+        {
+          id: uporabnik.id_uporabnik,
+          email: uporabnik.email,
+          vloga: uporabnik.dostop,
+        },
+        { expiresIn: "8h" },
+      );
+
+      return { token };
+    },
+  );
 }

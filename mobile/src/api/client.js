@@ -15,9 +15,21 @@ api.interceptors.request.use(async (config) => {
 api.interceptors.response.use(
   (response) => response,
   async (error) => {
-    if (error.response?.status === 401) {
-      await SecureStore.deleteItemAsync("jwt_token");
+    const originalRequest = error.config;
+
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+      try {
+        const res = await api.post("/auth/refresh");
+        const noviToken = res.data.token;
+        await SecureStore.setItemAsync("jwt_token", noviToken);
+        originalRequest.headers.Authorization = `Bearer ${noviToken}`;
+        return api(originalRequest);
+      } catch {
+        await SecureStore.deleteItemAsync("jwt_token");
+      }
     }
+
     return Promise.reject(error);
   },
 );
