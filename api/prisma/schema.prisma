@@ -43,6 +43,9 @@ model Voznja {
   trajanje        String?
   fk_uporabnik    Int
   timestamp_zapis DateTime?
+  stranka         String?      @db.VarChar(100)
+  relacija        String?      @db.VarChar(255)
+  opis            String?      @db.VarChar(500)
   uporabnik       Uporabnik    @relation(fields: [fk_uporabnik], references: [id_uporabnik])
   logs            LOG_voznja[]
 

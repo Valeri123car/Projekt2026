@@ -11,6 +11,18 @@ export default async function voznje(app) {
       return app.prisma.voznja.findMany({
         where: { fk_uporabnik: request.user.id },
         orderBy: { datum: "desc" },
+        select: {
+          id_voznja: true,
+          datum: true,
+          zacetek: true,
+          konc: true,
+          trajanje: true,
+          stranka: true,
+          relacija: true,
+          opis: true,
+          timestamp_zapis: true,
+          fk_uporabnik: true,
+        },
       });
     },
   );
@@ -27,13 +39,16 @@ export default async function voznje(app) {
             datum: { type: "string", format: "date" },
             zacetek: { type: "string" },
             konc: { type: "string" },
-            fk_stranka: { type: "integer" },
+            stranka: { type: "string" },
+            relacija: { type: "string" },
+            opis: { type: "string" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { datum, zacetek, konc, fk_stranka } = request.body;
+      const { datum, zacetek, konc, fk_stranka, stranka, relacija, opis } =
+        request.body;
 
       const voznja = await app.prisma.voznja.create({
         data: {
@@ -42,6 +57,9 @@ export default async function voznje(app) {
           konc: new Date(konc),
           fk_uporabnik: request.user.id,
           fk_stranka,
+          stranka: stranka || null,
+          relacija: relacija || null,
+          opis: opis || null,
           timestamp_zapis: new Date(),
         },
       });
