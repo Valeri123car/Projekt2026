@@ -1,20 +1,13 @@
 export default async function tahograf(app) {
-  const VELJAVNA_STANJA = ["VOZNJA", "ODMOR", "POCITEK", "DRUGO"];
-
   app.get(
     "/aktivno",
     {
       onRequest: [app.authenticate],
-      schema: {
-        description: "Vrni aktivni tahografski zapis (brez konca)",
-      },
+      schema: { description: "Vrni aktivni tahografski zapis (brez konca)" },
     },
     async (request) => {
       return app.prisma.tahografZapis.findFirst({
-        where: {
-          fk_uporabnik: request.user.id,
-          konec: null,
-        },
+        where: { fk_uporabnik: request.user.id, konec: null },
         orderBy: { zacetek: "desc" },
       });
     },
@@ -58,9 +51,7 @@ export default async function tahograf(app) {
     "/povzetek",
     {
       onRequest: [app.authenticate],
-      schema: {
-        description: "Dnevni povzetek časov po stanjih",
-      },
+      schema: { description: "Dnevni povzetek časov po stanjih" },
     },
     async (request) => {
       const danes = new Date();
@@ -98,37 +89,51 @@ export default async function tahograf(app) {
   );
 
   app.post(
-    "/zakljuci",
+    "/zacni",
     {
       onRequest: [app.authenticate],
       schema: {
-        description: "Zaključi aktivno stanje",
+        description: "Začni novo stanje",
+        body: {
+          type: "object",
+          required: ["stanje"],
+          properties: {
+            stanje: {
+              type: "string",
+              enum: ["VOZNJA", "ODMOR", "POCITEK", "DRUGO"],
+            },
+            lokacija_zac: { type: "string" },
+            cas_akcije: { type: "string" },
+          },
+        },
       },
     },
     async (request, reply) => {
-      const cas_akcije = request.body?.cas_akcije;
+      const { stanje, lokacija_zac, cas_akcije } = request.body;
       const zdaj = cas_akcije ? new Date(cas_akcije) : new Date();
 
       const aktivni = await app.prisma.tahografZapis.findFirst({
         where: { fk_uporabnik: request.user.id, konec: null },
       });
 
-      if (!aktivni) {
-        return reply.code(404).send({ error: "Ni aktivnega stanja" });
+      if (aktivni) {
+        const trajanje = Math.round((zdaj - new Date(aktivni.zacetek)) / 60000);
+        await app.prisma.tahografZapis.update({
+          where: { id_zapis: aktivni.id_zapis },
+          data: { konec: zdaj, trajanje_min: trajanje },
+        });
       }
 
-      const trajanje = Math.round((zdaj - new Date(aktivni.zacetek)) / 60000);
-
-      const posodobljen = await app.prisma.tahografZapis.update({
-        where: { id_zapis: aktivni.id_zapis },
+      const novi = await app.prisma.tahografZapis.create({
         data: {
-          konec: zdaj,
-          trajanje_min: trajanje,
-          lokacija_kon: request.body?.lokacija_kon || null,
+          fk_uporabnik: request.user.id,
+          stanje,
+          zacetek: zdaj,
+          lokacija_zac: lokacija_zac || null,
         },
       });
 
-      return posodobljen;
+      return reply.code(201).send(novi);
     },
   );
 
@@ -136,12 +141,11 @@ export default async function tahograf(app) {
     "/zakljuci",
     {
       onRequest: [app.authenticate],
-      schema: {
-        description: "Zaključi aktivno stanje",
-      },
+      schema: { description: "Zaključi aktivno stanje" },
     },
     async (request, reply) => {
-      const zdaj = new Date();
+      const cas_akcije = request.body?.cas_akcije;
+      const zdaj = cas_akcije ? new Date(cas_akcije) : new Date();
 
       const aktivni = await app.prisma.tahografZapis.findFirst({
         where: { fk_uporabnik: request.user.id, konec: null },
