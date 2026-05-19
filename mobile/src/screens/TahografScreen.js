@@ -198,6 +198,7 @@ export default function TahografScreen() {
   const vozbMinDanes = povzetek?.minute?.VOZNJA || 0;
   const vozbProgress = Math.min(vozbMinDanes / MAX_VOZNJA_MIN, 1);
   const vozbOpozorilo = vozbMinDanes >= 480;
+  const potrebenOdmor = vozbMinDanes >= 270 && vozbMinDanes < 480;
 
   return (
     <ScrollView
@@ -363,6 +364,23 @@ export default function TahografScreen() {
           </View>
         )}
       </View>
+
+      {potrebenOdmor && (
+        <View style={s.odmorKartica}>
+          <View style={s.odmorVrstica}>
+            <MaterialCommunityIcons
+              name="coffee-outline"
+              size={20}
+              color="#855300"
+            />
+            <Text style={s.odmorNaslov}>Čas za odmor</Text>
+          </View>
+          <Text style={s.odmorBesedilo}>
+            Vozite že {formatTrajanje(vozbMinDanes)} — po EU zakonodaji je po 4h
+            30min vožnje obvezen 45-minutni odmor.
+          </Text>
+        </View>
+      )}
 
       <Text style={s.sekcijaNaslov}>ZADNJI ZAPISI</Text>
       {zgodovina.length === 0 ? (
