@@ -154,12 +154,6 @@ export default async function tahograf(app) {
       onRequest: [app.authenticate],
       schema: {
         description: "Zaključi aktivno stanje",
-        body: {
-          type: "object",
-          properties: {
-            lokacija_kon: { type: "string" },
-          },
-        },
       },
     },
     async (request, reply) => {

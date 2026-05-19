@@ -46,6 +46,19 @@ function formatTrajanje(min) {
   return `${h}h ${m}min`;
 }
 
+function formatTrajanjeNatancno(zapis) {
+  if (!zapis.konec) return null;
+  const diff = Math.floor(
+    (new Date(zapis.konec) - new Date(zapis.zacetek)) / 1000,
+  );
+  const h = Math.floor(diff / 3600);
+  const m = Math.floor((diff % 3600) / 60);
+  const s = diff % 60;
+  if (h > 0) return `${h}h ${m}min ${s}s`;
+  if (m > 0) return `${m}min ${s}s`;
+  return `${s}s`;
+}
+
 export default function TahografScreen() {
   const [aktivno, setAktivno] = useState(null);
   const [povzetek, setPovzetek] = useState(null);
@@ -326,6 +339,14 @@ export default function TahografScreen() {
             day: "2-digit",
             month: "2-digit",
           });
+          const trajanje = zapis.konec
+            ? formatTrajanjeNatancno(zapis)
+            : formatTimer(
+                Math.floor(
+                  (Date.now() - new Date(zapis.zacetek).getTime()) / 1000,
+                ),
+              );
+
           return (
             <View
               key={zapis.id_zapis}
@@ -351,23 +372,14 @@ export default function TahografScreen() {
                   {datum} ob {cas}
                 </Text>
               </View>
-              <Text style={s.zapisTrajanje}>
-                {formatTrajanje(zapis.trajanje_min)}
-              </Text>
-              {!zapis.konec && (
-                <View
-                  style={[
-                    s.aktivnaPika,
-                    {
-                      backgroundColor: info.barva,
-                      marginLeft: 6,
-                      position: "relative",
-                      top: 0,
-                      right: 0,
-                    },
-                  ]}
-                />
-              )}
+              <View style={s.zapisDesno}>
+                <Text style={s.zapisTrajanje}>{trajanje}</Text>
+                {!zapis.konec && (
+                  <View
+                    style={[s.aktivnaPikaMala, { backgroundColor: info.barva }]}
+                  />
+                )}
+              </View>
             </View>
           );
         })
@@ -534,5 +546,7 @@ const s = StyleSheet.create({
   },
   zapisStanje: { fontSize: 14, fontWeight: "700" },
   zapisCas: { fontSize: 12, color: "#727785", marginTop: 2 },
+  zapisDesno: { alignItems: "flex-end", gap: 4 },
   zapisTrajanje: { fontSize: 13, fontWeight: "600", color: "#424754" },
+  aktivnaPikaMala: { width: 7, height: 7, borderRadius: 4 },
 });
