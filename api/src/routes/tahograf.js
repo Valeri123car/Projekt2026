@@ -98,53 +98,37 @@ export default async function tahograf(app) {
   );
 
   app.post(
-    "/zacni",
+    "/zakljuci",
     {
       onRequest: [app.authenticate],
       schema: {
-        description: "Začni novo stanje (zaključi prejšnje če obstaja)",
-        body: {
-          type: "object",
-          required: ["stanje"],
-          properties: {
-            stanje: {
-              type: "string",
-              enum: ["VOZNJA", "ODMOR", "POCITEK", "DRUGO"],
-            },
-            lokacija_zac: { type: "string" },
-          },
-        },
+        description: "Zaključi aktivno stanje",
       },
     },
     async (request, reply) => {
-      const { stanje, lokacija_zac } = request.body;
-      const zdaj = new Date();
+      const cas_akcije = request.body?.cas_akcije;
+      const zdaj = cas_akcije ? new Date(cas_akcije) : new Date();
 
       const aktivni = await app.prisma.tahografZapis.findFirst({
         where: { fk_uporabnik: request.user.id, konec: null },
       });
 
-      if (aktivni) {
-        const trajanje = Math.round((zdaj - new Date(aktivni.zacetek)) / 60000);
-        await app.prisma.tahografZapis.update({
-          where: { id_zapis: aktivni.id_zapis },
-          data: {
-            konec: zdaj,
-            trajanje_min: trajanje,
-          },
-        });
+      if (!aktivni) {
+        return reply.code(404).send({ error: "Ni aktivnega stanja" });
       }
 
-      const novi = await app.prisma.tahografZapis.create({
+      const trajanje = Math.round((zdaj - new Date(aktivni.zacetek)) / 60000);
+
+      const posodobljen = await app.prisma.tahografZapis.update({
+        where: { id_zapis: aktivni.id_zapis },
         data: {
-          fk_uporabnik: request.user.id,
-          stanje,
-          zacetek: zdaj,
-          lokacija_zac: lokacija_zac || null,
+          konec: zdaj,
+          trajanje_min: trajanje,
+          lokacija_kon: request.body?.lokacija_kon || null,
         },
       });
 
-      return reply.code(201).send(novi);
+      return posodobljen;
     },
   );
 

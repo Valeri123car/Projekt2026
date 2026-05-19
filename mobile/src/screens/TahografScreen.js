@@ -11,6 +11,15 @@ import {
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import api from "../api/client";
+import {
+  shraniAktivnoLokalno,
+  preberiAktivnoLokalno,
+  izbrisiAktivnoLokalno,
+  dodajCakajoci,
+  preberiCakajoche,
+  izbrisiCakajoche,
+} from "../store/tahografCache";
+import { useSinhronizacija } from "../hooks/useSinhronizacija";
 
 const STANJA = {
   VOZNJA: { label: "Vožnja", barva: "#0058be", ikona: "truck", velikost: 22 },
@@ -60,6 +69,7 @@ function formatTrajanjeNatancno(zapis) {
 }
 
 export default function TahografScreen() {
+  useSinhronizacija(naloziPodatke);
   const [aktivno, setAktivno] = useState(null);
   const [povzetek, setPovzetek] = useState(null);
   const [zgodovina, setZgodovina] = useState([]);
@@ -78,7 +88,14 @@ export default function TahografScreen() {
       setAktivno(akt.data);
       setPovzetek(pov.data);
       setZgodovina(zgod.data);
+      if (akt.data) {
+        await shraniAktivnoLokalno(akt.data);
+      } else {
+        await izbrisiAktivnoLokalno();
+      }
     } catch {
+      const lokalnoAktivno = await preberiAktivnoLokalno();
+      if (lokalnoAktivno) setAktivno(lokalnoAktivno);
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -108,11 +125,29 @@ export default function TahografScreen() {
   const zamenjajStanje = async (novoStanje) => {
     if (aktivno?.stanje === novoStanje) return;
     setMenjiLoading(true);
+
+    const zdaj = new Date().toISOString();
+    const noviZapis = {
+      stanje: novoStanje,
+      zacetek: zdaj,
+      konec: null,
+      id_zapis: null,
+      fk_uporabnik: aktivno?.fk_uporabnik,
+    };
+
+    await shraniAktivnoLokalno(noviZapis);
+    setAktivno(noviZapis);
+
     try {
       await api.post("/tahograf/zacni", { stanje: novoStanje });
       await naloziPodatke();
     } catch {
-      Alert.alert("Napaka", "Ni bilo mogoče zamenjati stanja.");
+      await dodajCakajoci({ tip: "zacni", stanje: novoStanje, cas: zdaj });
+      Alert.alert(
+        "Brez signala",
+        "Stanje je shranjeno lokalno. Ob vzpostavitvi povezave se sinhronizira.",
+        [{ text: "OK" }],
+      );
     } finally {
       setMenjiLoading(false);
     }
@@ -126,11 +161,22 @@ export default function TahografScreen() {
         style: "destructive",
         onPress: async () => {
           setMenjiLoading(true);
+          await izbrisiAktivnoLokalno();
+          setAktivno(null);
+
           try {
             await api.post("/tahograf/zakljuci");
             await naloziPodatke();
           } catch {
-            Alert.alert("Napaka", "Ni bilo mogoče zaključiti.");
+            await dodajCakajoci({
+              tip: "zakljuci",
+              cas: new Date().toISOString(),
+            });
+            Alert.alert(
+              "Brez signala",
+              "Zaključek je shranjen lokalno. Ob vzpostavitvi povezave se sinhronizira.",
+              [{ text: "OK" }],
+            );
           } finally {
             setMenjiLoading(false);
           }
