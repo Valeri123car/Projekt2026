@@ -131,28 +131,43 @@ export default async function auth(app) {
   app.post(
     "/refresh",
     {
-      onRequest: [app.authenticate],
       schema: { description: "Obnovi JWT token" },
     },
     async (request, reply) => {
-      const uporabnik = await app.prisma.uporabnik.findUnique({
-        where: { id_uporabnik: request.user.id },
-      });
-
-      if (!uporabnik) {
-        return reply.code(404).send({ error: "Uporabnik ne obstaja" });
+      const authHeader = request.headers.authorization;
+      if (!authHeader) {
+        return reply.code(401).send({ error: "Ni tokena" });
       }
 
-      const token = app.jwt.sign(
-        {
-          id: uporabnik.id_uporabnik,
-          email: uporabnik.email,
-          vloga: uporabnik.dostop,
-        },
-        { expiresIn: "8h" },
-      );
+      const token = authHeader.replace("Bearer ", "");
 
-      return { token };
+      try {
+        const decoded = app.jwt.decode(token);
+        if (!decoded?.id) {
+          return reply.code(401).send({ error: "Neveljaven token" });
+        }
+
+        const uporabnik = await app.prisma.uporabnik.findUnique({
+          where: { id_uporabnik: decoded.id },
+        });
+
+        if (!uporabnik) {
+          return reply.code(401).send({ error: "Uporabnik ne obstaja" });
+        }
+
+        const noviToken = app.jwt.sign(
+          {
+            id: uporabnik.id_uporabnik,
+            email: uporabnik.email,
+            vloga: uporabnik.dostop,
+          },
+          { expiresIn: "8h" },
+        );
+
+        return { token: noviToken };
+      } catch {
+        return reply.code(401).send({ error: "Neveljaven token" });
+      }
     },
   );
 }
