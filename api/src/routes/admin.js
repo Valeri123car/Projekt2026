@@ -66,6 +66,48 @@ export default async function admin(app) {
   );
 
   app.get(
+  "/voznje/:driverId",
+  {
+    onRequest: [app.authenticate, adminOnly],
+    schema: {
+      description: "Vrni vse vožnje specifičnega voznika (samo admin)",
+      params: {
+        type: "object",
+        properties: {
+          driverId: { type: "integer" },
+        },
+        required: ["driverId"],
+      },
+      querystring: {
+        type: "object",
+        properties: {
+          od: { type: "string", format: "date" },
+          do: { type: "string", format: "date" },
+        },
+      },
+    },
+  },
+  async (request) => {
+    const { driverId } = request.params;
+    const { od, do: do_ } = request.query;
+
+    const where = { fk_uporabnik: parseInt(driverId) };
+    
+    if (od || do_) {
+      where.datum = {};
+      if (od) where.datum.gte = new Date(od);
+      if (do_) where.datum.lte = new Date(do_);
+    }
+
+    return app.prisma.voznja.findMany({
+      where,
+      include: { uporabnik: { select: { ime: true, priimek: true } } },
+      orderBy: { datum: "desc" },
+    });
+  },
+);
+
+  app.get(
     "/urnik",
     {
       onRequest: [app.authenticate, adminOnly],
