@@ -5,6 +5,7 @@ import swagger from "@fastify/swagger";
 import swaggerUi from "@fastify/swagger-ui";
 import rateLimit from "@fastify/rate-limit";
 import basicAuth from "@fastify/basic-auth";
+import multipart from "@fastify/multipart";
 
 const app = Fastify({ logger: true });
 
@@ -25,6 +26,12 @@ await app.register(cors, {
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
+});
+
+await app.register(multipart, {
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB
+  },
 });
 
 await app.register(jwt, {
@@ -92,6 +99,9 @@ await app.register(import("./routes/dashboard.js"), {
 });
 await app.register(import("./routes/tahograf.js"), {
   prefix: "/api/v1/tahograf",
+});
+await app.register(import("./routes/ddd_upload.js"), {
+  prefix: "/api/v1/ddd",
 });
 
 app.get("/health", async () => ({ status: "ok" }));
