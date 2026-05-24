@@ -4,6 +4,7 @@ import ProtectedRoute from './components/ProtectedRoute'
 import Login from './pages/Login'
 import Dashboard from './pages/Dashboard'
 import Racuni from './pages/Racuni'
+import Vozniki from './pages/Vozniki'
 import AuditLog from './pages/AuditLog'
 
 const queryClient = new QueryClient()
@@ -16,6 +17,7 @@ export default function App() {
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/racuni" element={<ProtectedRoute><Racuni /></ProtectedRoute>} />
+          <Route path="/vozniki" element={<ProtectedRoute vlogaRequired={2}><Vozniki /></ProtectedRoute>} />
           <Route path="/audit" element={<ProtectedRoute vlogaRequired={2}><AuditLog /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
