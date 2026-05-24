@@ -4,7 +4,6 @@ import { useAuth } from '../hooks/useAuth'
 const navItems = [
   { path: '/',        icon: 'dashboard',    label: 'Nadzorna plošča' },
   { path: '/vozniki', icon: 'group',        label: 'Vozniki' },
-  { path: '/tahograf',icon: 'speed',        label: 'Tahograf' },
   { path: '/racuni',  icon: 'receipt_long', label: 'Računi' },
   { path: '/audit',   icon: 'history',      label: 'Dnevnik revizije' }
 ]
