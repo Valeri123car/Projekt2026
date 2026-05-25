@@ -131,6 +131,9 @@ model TahografZapis {
   trajanje_min    Int?
   lokacija_zac    String?   @db.VarChar(100)
   lokacija_kon    String?   @db.VarChar(100)
+  registrska      String?   @db.VarChar(20)
+  posadka         Boolean   @default(false)
+  uvoz            Boolean   @default(false)
   timestamp_zapis DateTime  @default(now())
   uporabnik       Uporabnik @relation(fields: [fk_uporabnik], references: [id_uporabnik])
 

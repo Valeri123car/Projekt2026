@@ -30,6 +30,18 @@ const STANJA = {
     velikost: 22,
   },
   POCITEK: { label: "Počitek", barva: "#2e7d32", ikona: "sleep", velikost: 22 },
+  DELO: {
+    label: "Delo",
+    barva: "#6a1b9a",
+    ikona: "briefcase-outline",
+    velikost: 22,
+  },
+  RAZPOLOZLJIVOST: {
+    label: "Razpoložljivost",
+    barva: "#e65100",
+    ikona: "clock-outline",
+    velikost: 22,
+  },
   DRUGO: {
     label: "Drugo",
     barva: "#555555",

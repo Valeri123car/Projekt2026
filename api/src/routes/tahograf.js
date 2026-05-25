@@ -67,7 +67,14 @@ export default async function tahograf(app) {
         },
       });
 
-      const povzetek = { VOZNJA: 0, ODMOR: 0, POCITEK: 0, DRUGO: 0 };
+      const povzetek = {
+        VOZNJA: 0,
+        ODMOR: 0,
+        POCITEK: 0,
+        DELO: 0,
+        RAZPOLOZLJIVOST: 0,
+        DRUGO: 0,
+      };
 
       for (const z of zapisi) {
         if (z.trajanje_min && povzetek[z.stanje] !== undefined) {
@@ -100,16 +107,26 @@ export default async function tahograf(app) {
           properties: {
             stanje: {
               type: "string",
-              enum: ["VOZNJA", "ODMOR", "POCITEK", "DRUGO"],
+              enum: [
+                "VOZNJA",
+                "ODMOR",
+                "POCITEK",
+                "DELO",
+                "RAZPOLOZLJIVOST",
+                "DRUGO",
+              ],
             },
             lokacija_zac: { type: "string" },
             cas_akcije: { type: "string" },
+            registrska: { type: "string" },
+            posadka: { type: "boolean" },
           },
         },
       },
     },
     async (request, reply) => {
-      const { stanje, lokacija_zac, cas_akcije } = request.body;
+      const { stanje, lokacija_zac, cas_akcije, registrska, posadka } =
+        request.body;
       const zdaj = cas_akcije ? new Date(cas_akcije) : new Date();
 
       const aktivni = await app.prisma.tahografZapis.findFirst({
@@ -130,6 +147,9 @@ export default async function tahograf(app) {
           stanje,
           zacetek: zdaj,
           lokacija_zac: lokacija_zac || null,
+          registrska: registrska || null,
+          posadka: posadka || false,
+          vir: "POSNETO",
         },
       });
 
