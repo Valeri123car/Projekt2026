@@ -133,11 +133,12 @@ model TahografZapis {
   lokacija_kon    String?   @db.VarChar(100)
   registrska      String?   @db.VarChar(20)
   posadka         Boolean   @default(false)
-  uvoz            Boolean   @default(false)
+  vir             String    @default("POSNETO") @db.VarChar(20)
   timestamp_zapis DateTime  @default(now())
   uporabnik       Uporabnik @relation(fields: [fk_uporabnik], references: [id_uporabnik])
 
   @@index([fk_uporabnik])
   @@index([stanje])
+  @@index([vir])
   @@map("tahograf_zapis")
 }
