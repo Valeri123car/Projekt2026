@@ -5,9 +5,11 @@ import * as SecureStore from "expo-secure-store";
 
 WebBrowser.maybeCompleteAuthSession();
 
-const GOOGLE_CLIENT_ID =
-  "17825452380-iol1f1b59suivj72en43q31s5l5uq985.apps.googleusercontent.com";
+const GOOGLE_IOS_CLIENT_ID =
+  "17825452380-rhtt0baohqrcuudn5hc8rpioj8r215j7.apps.googleusercontent.com";
 const CALENDAR_SCOPE = "https://www.googleapis.com/auth/calendar.events";
+const REDIRECT_URI =
+  "com.googleusercontent.apps.17825452380-rhtt0baohqrcuudn5hc8rpioj8r215j7:/redirect";
 
 const discovery = {
   authorizationEndpoint: "https://accounts.google.com/o/oauth2/v2/auth",
@@ -19,14 +21,14 @@ export function useGoogleCalendar() {
   const [googleToken, setGoogleToken] = useState(null);
   const [loading, setLoading] = useState(false);
 
-  const redirectUri = "http://localhost:8081";
-
   const [request, response, promptAsync] = AuthSession.useAuthRequest(
     {
-      clientId: GOOGLE_CLIENT_ID,
+      clientId: GOOGLE_IOS_CLIENT_ID,
+      iosClientId: GOOGLE_IOS_CLIENT_ID,
       scopes: [CALENDAR_SCOPE],
-      redirectUri,
-      responseType: AuthSession.ResponseType.Token,
+      redirectUri: REDIRECT_URI,
+      responseType: AuthSession.ResponseType.Code,
+      usePKCE: false,
     },
     discovery,
   );
@@ -37,11 +39,8 @@ export function useGoogleCalendar() {
 
   useEffect(() => {
     if (response?.type === "success") {
-      const token = response.authentication?.accessToken;
-      if (token) {
-        SecureStore.setItemAsync("google_calendar_token", token);
-        setGoogleToken(token);
-      }
+      const code = response.params?.code;
+      if (code) zamenjajZaToken(code);
     }
   }, [response]);
 
@@ -50,10 +49,38 @@ export function useGoogleCalendar() {
     if (token) setGoogleToken(token);
   };
 
+  const zamenjajZaToken = async (code) => {
+    try {
+      const jwtToken = await SecureStore.getItemAsync("jwt_token");
+      const res = await fetch(
+        "https://projekt2026.fly.dev/api/v1/auth/google-token",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${jwtToken}`,
+          },
+          body: JSON.stringify({ code, redirectUri: REDIRECT_URI }),
+        },
+      );
+      const data = await res.json();
+      console.log("TOKEN EXCHANGE:", JSON.stringify(data));
+      if (data.access_token) {
+        await SecureStore.setItemAsync(
+          "google_calendar_token",
+          data.access_token,
+        );
+        setGoogleToken(data.access_token);
+      }
+    } catch (err) {
+      console.log("TOKEN EXCHANGE ERROR:", err);
+    }
+  };
+
   const povezi = async () => {
     setLoading(true);
     try {
-      console.log("REDIRECT URI:", redirectUri);
+      console.log("REDIRECT URI:", REDIRECT_URI);
       const result = await promptAsync();
       console.log("AUTH RESULT:", JSON.stringify(result));
     } finally {
@@ -95,10 +122,7 @@ export function useGoogleCalendar() {
           dateTime: zacetek.toISOString(),
           timeZone: "Europe/Ljubljana",
         },
-        end: {
-          dateTime: konec.toISOString(),
-          timeZone: "Europe/Ljubljana",
-        },
+        end: { dateTime: konec.toISOString(), timeZone: "Europe/Ljubljana" },
         colorId: "1",
       };
 

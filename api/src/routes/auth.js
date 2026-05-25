@@ -170,4 +170,39 @@ export default async function auth(app) {
       }
     },
   );
+
+  app.post(
+    "/google-token",
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        body: {
+          type: "object",
+          required: ["code"],
+          properties: {
+            code: { type: "string" },
+            redirectUri: { type: "string" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { code, redirectUri } = request.body;
+
+      const res = await fetch("https://oauth2.googleapis.com/token", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: new URLSearchParams({
+          code,
+          client_id:
+            "17825452380-rhtt0baohqrcuudn5hc8rpioj8r215j7.apps.googleusercontent.com",
+          redirect_uri: redirectUri,
+          grant_type: "authorization_code",
+        }),
+      });
+
+      const data = await res.json();
+      return data;
+    },
+  );
 }
