@@ -12,6 +12,7 @@ import {
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import api from "../api/client";
+import { useGoogleCalendar } from "../hooks/useGoogleCalendar";
 
 export default function NovaVoznjaScreen({ navigation }) {
   const [datum, setDatum] = useState(new Date());
@@ -22,6 +23,8 @@ export default function NovaVoznjaScreen({ navigation }) {
   const [opis, setOpis] = useState("");
   const [loading, setLoading] = useState(false);
   const [aktivniPicker, setAktivniPicker] = useState(null);
+
+  const { dodajVoznjovVKolendar, jePovedzan } = useGoogleCalendar();
 
   const dodajPostajo = () => {
     if (postaje.length < 6) setPostaje([...postaje, ""]);
@@ -59,7 +62,7 @@ export default function NovaVoznjaScreen({ navigation }) {
 
     setLoading(true);
     try {
-      await api.post("/voznje", {
+      const res = await api.post("/voznje", {
         datum: datum.toISOString().split("T")[0],
         zacetek: zacDatum.toISOString(),
         konc: konDatum.toISOString(),
@@ -67,6 +70,11 @@ export default function NovaVoznjaScreen({ navigation }) {
         relacija: relacija || null,
         opis: opis || null,
       });
+
+      if (jePovedzan) {
+        await dodajVoznjovVKolendar(res.data);
+      }
+
       Alert.alert("Uspešno", "Vožnja je bila shranjena.", [
         { text: "OK", onPress: () => navigation.goBack() },
       ]);
@@ -165,7 +173,6 @@ export default function NovaVoznjaScreen({ navigation }) {
               />
             </TouchableOpacity>
           </View>
-
           <View style={s.casPolje}>
             <Text style={s.label}>Konec</Text>
             <TouchableOpacity
@@ -363,6 +370,15 @@ export default function NovaVoznjaScreen({ navigation }) {
         </View>
       </View>
 
+      {jePovedzan && (
+        <View style={s.googleInfo}>
+          <MaterialCommunityIcons name="google" size={14} color="#2e7d32" />
+          <Text style={s.googleInfoTxt}>
+            Vožnja bo dodana v Google Calendar
+          </Text>
+        </View>
+      )}
+
       <TouchableOpacity style={s.shraniBtn} onPress={shrani} disabled={loading}>
         {loading ? (
           <ActivityIndicator color="#fff" />
@@ -518,6 +534,18 @@ const s = StyleSheet.create({
     fontWeight: "600",
     flex: 1,
   },
+  googleInfo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#f1f8f1",
+    padding: 10,
+    borderRadius: 8,
+    marginBottom: 12,
+    borderWidth: 1,
+    borderColor: "#2e7d32",
+  },
+  googleInfoTxt: { color: "#2e7d32", fontSize: 12, fontWeight: "600" },
   shraniBtn: {
     backgroundColor: "#0058be",
     borderRadius: 12,

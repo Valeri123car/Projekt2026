@@ -10,7 +10,9 @@ import VoznjeScreen from "./src/screens/VoznjeScreen";
 import NovaVoznjaScreen from "./src/screens/NovaVoznjaScreen";
 import TahografScreen from "./src/screens/TahografScreen";
 import VoznjaDetailScreen from "./src/screens/VoznjaDetailScreen";
+import UrnikScreen from "./src/screens/UrnikScreen";
 import useAuthStore from "./src/store/authStore";
+import { izbrisiCakajoche } from "./src/store/tahografCache";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -71,6 +73,20 @@ function MainTabs() {
           ),
         }}
       />
+      <Tab.Screen
+        name="Urnik"
+        component={UrnikScreen}
+        options={{
+          tabBarLabel: "Urnik",
+          tabBarIcon: ({ color, size }) => (
+            <MaterialCommunityIcons
+              name="calendar-month-outline"
+              size={size}
+              color={color}
+            />
+          ),
+        }}
+      />
     </Tab.Navigator>
   );
 }
@@ -81,6 +97,7 @@ export default function App() {
   useEffect(() => {
     loadToken();
     preveriNapravo();
+    izbrisiCakajoche().catch(() => {});
   }, []);
 
   const preveriNapravo = async () => {

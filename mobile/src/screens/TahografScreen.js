@@ -91,6 +91,8 @@ export default function TahografScreen() {
   const [menjiLoading, setMenjiLoading] = useState(false);
 
   const naloziPodatke = useCallback(async () => {
+    const cakajoci = await preberiCakajoche();
+    console.log("CAKAJOCI:", JSON.stringify(cakajoci));
     try {
       const [akt, pov, zgod] = await Promise.all([
         api.get("/tahograf/aktivno"),
@@ -151,9 +153,15 @@ export default function TahografScreen() {
     setAktivno(noviZapis);
 
     try {
-      await api.post("/tahograf/zacni", { stanje: novoStanje });
+      const res = await api.post("/tahograf/zacni", { stanje: novoStanje });
+      console.log("ZACNI OK:", JSON.stringify(res.data));
       await naloziPodatke();
-    } catch {
+    } catch (err) {
+      console.log(
+        "ZACNI ERROR:",
+        err.response?.status,
+        JSON.stringify(err.response?.data),
+      );
       await dodajCakajoci({ tip: "zacni", stanje: novoStanje, cas: zdaj });
       Alert.alert(
         "Brez signala",
