@@ -3,10 +3,10 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "node --watch src/app.js",
-    "start": "node src/app.js",
-    "migrate": "prisma migrate deploy"
-  },
+  "start": "prisma generate && node src/app.js",
+  "migrate": "prisma migrate deploy",
+  "dev": "nodemon src/app.js"
+},
   "dependencies": {
     "@fastify/basic-auth": "^6.2.0",
     "@fastify/cors": "^11.2.0",
