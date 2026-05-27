@@ -80,6 +80,9 @@ export default async function dddUpload(app) {
           pythonScript
         );
 
+        console.log(`[UPLOAD] Python script path: ${pythonPath}`);
+        console.log(`[UPLOAD] Python args: ${pythonArgs.join(" ")}`);
+
         const parsedData = await new Promise((resolve, reject) => {
           let output = "";
           let errorOutput = "";
@@ -101,6 +104,9 @@ export default async function dddUpload(app) {
             );
 
             if (code !== 0) {
+              console.error(`[UPLOAD] Python script failed with code ${code}`);
+              console.error(`[UPLOAD] stderr: ${errorOutput}`);
+              console.error(`[UPLOAD] stdout: ${output}`);
               reject(new Error(`${fileType} parser failed: ${errorOutput}`));
               return;
             }
@@ -193,6 +199,7 @@ export default async function dddUpload(app) {
         });
       } catch (error) {
         console.error("[ERROR] Napaka pri nalaganju datoteke:", error.message);
+        console.error("[ERROR] Stack:", error.stack);
         return reply.code(500).send({
           error: "Napaka pri procesiranju datoteke",
           details: error.message,
