@@ -35,7 +35,7 @@ export default async function dddUpload(app) {
         }
 
 
-        const isDDD = data.filename.endsWith(".ddd");
+        const isDDD = data.filename.endsWith(".DDD");
         const isExcel = data.filename.endsWith(".xlsx") || data.filename.endsWith(".xls");
 
         if (!isDDD && !isExcel) {
@@ -156,54 +156,47 @@ export default async function dddUpload(app) {
         console.log(`[UPLOAD] Uporabnik najden: ${parsedData.voznik} (ID: ${id_uporabnik})`);
 
         const voznje = parsedData.records;
-        const results = {
-          success: [],
-          failed: []
-        };
 
-        for (let i = 0; i < voznje.length; i++) {
-          const voznja = voznje[i];
-          try {
-            await app.prisma.voznja.create({
-              data: {
-                datum: new Date(),
-                zacetek: new Date(voznja.zacetek),
-                konc: new Date(voznja.konec),
-                trajanje: voznja.dolzina || voznja.trajanje,
-                aktivnost: voznja.aktivnost || null,
-                registerska: voznja.registerska || null,
-                posadka: voznja.posadka || null,
-                fk_uporabnik: id_uporabnik
-              }   
-            });
-            results.success.push(i + 1);
-          } catch (error) {
-            console.error(`[UPLOAD] Napaka pri shranjevanju voznje ${i + 1}:`, error.message);
-            results.failed.push({
-              index: i + 1,
-              voznja: voznja,
-              error: error.message
-            });
-          }
+        try {
+          // Use transaction: all-or-nothing
+          await app.prisma.$transaction(
+            voznje.map((voznja) =>
+              app.prisma.voznja.create({
+                data: {
+                  datum: new Date(),
+                  zacetek: new Date(voznja.zacetek),
+                  konc: new Date(voznja.konec),
+                  trajanje: voznja.dolzina || voznja.trajanje,
+                  aktivnost: voznja.aktivnost || null,
+                  registerska: voznja.registerska || null,
+                  posadka: voznja.posadka || null,
+                  fk_uporabnik: id_uporabnik
+                }
+              })
+            )
+          );
+
+          console.log(`[UPLOAD] Shranjenih vozanj: ${voznje.length}/${voznje.length}`);
+
+          return reply.code(201).send({
+            success: true,
+            message: `${fileType} datoteka uspešno parsirana`,
+            fileType: fileType,
+            summary: {
+              total: voznje.length,
+              saved: voznje.length,
+              failed: 0
+            },
+            failures: null,
+            data: parsedData,
+          });
+        } catch (error) {
+          console.error(`[UPLOAD] Napaka pri shranjevanju vozanj (transakacija rollback):`, error.message);
+          return reply.code(400).send({
+            error: "Napaka pri shranjevanju vozanj - nobena voznja ni bila shranjena",
+            details: error.message,
+          });
         }
-
-        console.log(`[UPLOAD] Shranjenih vozanj: ${results.success.length}/${voznje.length}`);
-        if (results.failed.length > 0) {
-          console.log(`[UPLOAD] Napake pri ${results.failed.length} voznjah`);
-        }
-
-        return reply.code(201).send({
-          success: true,
-          message: `${fileType} datoteka uspešno parsirana`,
-          fileType: fileType,
-          summary: {
-            total: voznje.length,
-            saved: results.success.length,
-            failed: results.failed.length
-          },
-          failures: results.failed.length > 0 ? results.failed : null,
-          data: parsedData,
-        });
       } catch (error) {
         console.error("[ERROR] Napaka pri nalaganju datoteke:", error.message);
         console.error("[ERROR] Stack:", error.stack);

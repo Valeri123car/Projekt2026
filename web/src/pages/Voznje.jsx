@@ -3,6 +3,8 @@ import Sidebar from "../components/Sidebar";
 import api from "../api/client";
 
 export default function Voznje() {
+  const ITEMS_PER_PAGE = 20;
+  
   const [voznje, setVoznje] = useState([]);
   const [filteredVoznje, setFilteredVoznje] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -10,6 +12,7 @@ export default function Voznje() {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
 
   // Filter states
   const [filterDateFrom, setFilterDateFrom] = useState("");
@@ -124,14 +127,11 @@ export default function Voznje() {
     }
   };
 
-  const formatDate = (dateString) => {
+  const formatDateTime = (dateString) => {
     const date = new Date(dateString);
-    return date.toLocaleDateString("sl-SI");
-  };
-
-  const formatTime = (dateString) => {
-    const date = new Date(dateString);
-    return date.toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" });
+    const datePart = date.toLocaleDateString("sl-SI");
+    const timePart = date.toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" });
+    return `${datePart} ${timePart}`;
   };
 
   return (
@@ -256,8 +256,9 @@ export default function Voznje() {
                   setFilterDateTo("");
                   setFilterVoznik("");
                   setSortBy("datum-desc");
+                  setCurrentPage(1);
                 }}
-                className="w-full px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-800 font-medium rounded-lg transition"
+                className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition"
               >
                 Počisti
               </button>
@@ -265,10 +266,31 @@ export default function Voznje() {
           </div>
         </div>
 
-        {/* Results Count */}
-        <div className="mb-4 text-sm text-gray-600">
-          Prikazane vožnje: <strong>{filteredVoznje.length}</strong> od{" "}
-          <strong>{voznje.length}</strong>
+        {/* Results Count and Pagination */}
+        <div className="mb-4 flex items-center justify-between text-sm text-gray-600">
+          <div>
+            Prikazane vožnje: <strong>{Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredVoznje.length)}-{Math.min(currentPage * ITEMS_PER_PAGE, filteredVoznje.length)}</strong> od{" "}
+            <strong>{filteredVoznje.length}</strong> (skupaj {voznje.length})
+          </div>
+          <div className="flex gap-2 items-center">
+            <button
+              onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
+              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Prejšnja
+            </button>
+            <span className="px-3 py-1">
+              Stran <strong>{currentPage}</strong> od <strong>{Math.ceil(filteredVoznje.length / ITEMS_PER_PAGE) || 1}</strong>
+            </span>
+            <button
+              onClick={() => setCurrentPage(Math.min(Math.ceil(filteredVoznje.length / ITEMS_PER_PAGE), currentPage + 1))}
+              disabled={currentPage >= Math.ceil(filteredVoznje.length / ITEMS_PER_PAGE)}
+              className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              Naslednja
+            </button>
+          </div>
         </div>
       </div>
 
@@ -285,10 +307,10 @@ export default function Voznje() {
             <thead>
               <tr className="bg-gray-100 border-b-2 border-gray-300">
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                  Datum
+                  Voznik
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                  Začetek
+                  Zacetek
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                   Konec
@@ -297,45 +319,53 @@ export default function Voznje() {
                   Trajanje
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                  Stranka
+                  Aktivnost
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                  Registerska
+                </th>
+                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
+                  Posadka
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
                   Relacija
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                  Opis
-                </th>
-                <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                  Voznik
+                  Stranka
                 </th>
               </tr>
             </thead>
             <tbody>
-              {filteredVoznje.map((voznja) => (
+              {filteredVoznje
+                .slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
+                .map((voznja) => (
                 <tr key={voznja.id_voznja} className="border-b border-gray-200 hover:bg-gray-50">
-                  <td className="px-6 py-4 text-sm text-gray-900 font-medium">
-                    {formatDate(voznja.datum)}
+                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
+                    {voznja.uporabnik ? `${voznja.uporabnik.ime} ${voznja.uporabnik.priimek}` : "-"}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-700">
-                    {formatTime(voznja.zacetek)}
+                    {formatDateTime(voznja.zacetek)}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-700">
-                    {formatTime(voznja.konc)}
+                    {formatDateTime(voznja.konc)}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-700">
-                    {voznja.trajanje ? `${Math.round(voznja.trajanje / 60)} min` : "-"}
+                    {voznja.trajanje || "-"}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-700">
-                    {voznja.stranka || "-"}
+                    {voznja.aktivnost || "-"}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-700">
+                    {voznja.registerska || "-"}
+                  </td>
+                  <td className="px-6 py-4 text-sm text-gray-700">
+                    {voznja.posadka || "-"}
                   </td>
                   <td className="px-6 py-4 text-sm text-gray-700">
                     {voznja.relacija || "-"}
                   </td>
-                  <td className="px-6 py-4 text-sm text-gray-700 max-w-xs truncate">
-                    {voznja.opis || "-"}
-                  </td>
-                  <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                    {voznja.uporabnik ? `${voznja.uporabnik.ime} ${voznja.uporabnik.priimek}` : "-"}
+                  <td className="px-6 py-4 text-sm text-gray-700">
+                    {voznja.stranka || "-"}
                   </td>
                 </tr>
               ))}
