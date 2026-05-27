@@ -7,6 +7,6 @@ RUN npm ci --only=production
 RUN npx prisma generate
 COPY src ./src
 COPY python ./python
-RUN pip install openpyxl
+RUN pip install --break-system-packages openpyxl
 EXPOSE 3000
 CMD ["node", "src/app.js"]
