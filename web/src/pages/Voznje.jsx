@@ -19,8 +19,8 @@ export default function Voznje() {
 
   // Get unique vozniki for filter dropdown
   const uniqueVozniki = Array.from(
-    new Set(voznje.map((v) => v.fk_uporabnik))
-  ).sort();
+    new Set(voznje.map((v) => JSON.stringify({ id: v.fk_uporabnik, ime: v.uporabnik?.ime, priimek: v.uporabnik?.priimek })))
+  ).map(v => JSON.parse(v)).sort((a, b) => (a.ime + a.priimek).localeCompare(b.ime + b.priimek));
 
   // Fetch voznje on component mount
   useEffect(() => {
@@ -223,8 +223,8 @@ export default function Voznje() {
               >
                 <option value="">Vsi vozniki</option>
                 {uniqueVozniki.map((voznik) => (
-                  <option key={voznik} value={voznik}>
-                    ID: {voznik}
+                  <option key={voznik.id} value={voznik.id}>
+                    {voznik.ime} {voznik.priimek}
                   </option>
                 ))}
               </select>
@@ -306,7 +306,7 @@ export default function Voznje() {
                   Opis
                 </th>
                 <th className="px-6 py-3 text-left text-sm font-semibold text-gray-900">
-                  Voznik (ID)
+                  Voznik
                 </th>
               </tr>
             </thead>
@@ -335,7 +335,7 @@ export default function Voznje() {
                     {voznja.opis || "-"}
                   </td>
                   <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                    {voznja.fk_uporabnik}
+                    {voznja.uporabnik ? `${voznja.uporabnik.ime} ${voznja.uporabnik.priimek}` : "-"}
                   </td>
                 </tr>
               ))}

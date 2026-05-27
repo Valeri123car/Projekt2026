@@ -41,6 +41,9 @@ model Voznja {
   zacetek         DateTime
   konc            DateTime
   trajanje        String?
+  aktivnost       String?
+  registerska     String?
+  posadka         String?
   fk_uporabnik    Int
   timestamp_zapis DateTime?
   stranka         String?      @db.VarChar(100)
