@@ -110,7 +110,13 @@ export default async function dddUpload(app) {
             }
 
             try {
-              const parsed = JSON.parse(output);
+              // Extract JSON from output (skip any debug messages before JSON)
+              const jsonStart = output.indexOf('{');
+              if (jsonStart === -1) {
+                throw new Error(`No JSON found in output: ${output}`);
+              }
+              const jsonString = output.substring(jsonStart);
+              const parsed = JSON.parse(jsonString);
               resolve(parsed);
             } catch (e) {
               reject(
@@ -162,9 +168,11 @@ export default async function dddUpload(app) {
                 datum: new Date(),
                 zacetek: new Date(voznja.zacetek),
                 konec: new Date(voznja.konec),
-                trajanje: voznja.trajanje,
+                trajanje: voznja.dolzina || voznja.trajanje,
+                aktivnost: voznja.aktivnost || null,
+                registerska: voznja.registerska || null,
+                posadka: voznja.posadka || null,
                 fk_uporabnik: id_uporabnik
-                //TODO dodaj se potem aktivnost, registerska in posadko ko posodobis v bazi
               }   
             });
             results.success.push(i + 1);
