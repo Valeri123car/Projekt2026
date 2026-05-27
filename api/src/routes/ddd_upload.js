@@ -133,10 +133,10 @@ export default async function dddUpload(app) {
 
         //find user in database
         const voznikParts = parsedData.voznik.split(' ');
-        const ime = voznikParts[0];
-        const priimek = voznikParts.slice(1).join(' ');
+        const priimek = voznikParts[0];
+        const ime = voznikParts.slice(1).join(' ');
         console.log(`[UPLOAD] Iskanje uporabnika: ${ime} ${priimek}`);
-        
+
         const user = await app.prisma.uporabnik.findFirst({
           where: {
             ime: { equals: ime, mode: 'insensitive' },
