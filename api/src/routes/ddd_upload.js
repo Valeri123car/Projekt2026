@@ -4,6 +4,18 @@ import path from "path";
 import os from "os";
 
 export default async function dddUpload(app) {
+  app.get(
+    "/test-upload",
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        description: "Testni endpoint za nalaganje DDD datoteke",
+      },
+    }, async (request, reply) => {
+      return { message: "Endpoint deluje, pošlji POST zahtevek z DDD datoteko na /upload" };
+    }
+  );
+
   app.post(
     "/upload",
     {

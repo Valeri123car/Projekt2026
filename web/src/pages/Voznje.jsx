@@ -93,6 +93,14 @@ export default function Voznje() {
     try {
       setUploadLoading(true);
       setUploadSuccess(false);
+      setError(null);
+
+      // Test endpoint first
+      console.log("Testing endpoint...");
+      await api.get("/ddd_upload/test-upload");
+      console.log("Endpoint test passed!");
+
+      // Proceed with actual upload
       const formData = new FormData();
       formData.append("file", selectedFile);
 
