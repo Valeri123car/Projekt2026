@@ -62,7 +62,7 @@ def read_excel_to_json(file_path, output_json_path=None):
         dolzina = ws.cell(row=row_idx, column=5).value
         aktivnost = ws.cell(row=row_idx, column=6).value
         registerska = ws.cell(row=row_idx, column=7).value
-        
+        posadka = ws.cell(row=row_idx, column=8).value
         # Skip empty rows
         if not zacetek_date and not konec_date:
             continue
@@ -78,7 +78,7 @@ def read_excel_to_json(file_path, output_json_path=None):
             'dolzina': str(dolzina) if dolzina else None,
             'aktivnost': str(aktivnost) if aktivnost else None,
             'registerska': str(registerska) if registerska else None,
-            'posadka': None  # Not provided in Excel
+            'posadka': str(posadka) if posadka else None  
         }
         
         records.append(record)

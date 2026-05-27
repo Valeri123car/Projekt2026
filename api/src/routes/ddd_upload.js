@@ -149,7 +149,7 @@ export default async function dddUpload(app) {
                 trajanje: voznja.trajanje,
                 fk_uporabnik: id_uporabnik
                 //TODO dodaj se potem aktivnost, registerska in posadko ko posodobis v bazi
-              }
+              }   
             });
             results.success.push(i + 1);
           } catch (error) {
