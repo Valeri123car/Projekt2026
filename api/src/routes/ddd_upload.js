@@ -168,7 +168,7 @@ export default async function dddUpload(app) {
               data: {
                 datum: new Date(),
                 zacetek: new Date(voznja.zacetek),
-                konec: new Date(voznja.konec),
+                konc: new Date(voznja.konec),
                 trajanje: voznja.dolzina || voznja.trajanje,
                 aktivnost: voznja.aktivnost || null,
                 registerska: voznja.registerska || null,
