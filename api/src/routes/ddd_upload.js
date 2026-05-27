@@ -74,8 +74,6 @@ export default async function dddUpload(app) {
         // Get full path to Python script
         const pythonPath = path.join(
           process.cwd(),
-          "..",
-          "server",
           "python",
           pythonScript
         );
