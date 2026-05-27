@@ -27,7 +27,7 @@ export default async function dddUpload(app) {
     },
     async (request, reply) => {
       try {
-
+        console.log("[UPLOAD] Prejem datoteke...");
         const data = await request.file();
 
         if (!data) {
