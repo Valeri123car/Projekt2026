@@ -101,7 +101,7 @@ await app.register(import("./routes/tahograf.js"), {
   prefix: "/api/v1/tahograf",
 });
 await app.register(import("./routes/ddd_upload.js"), {
-  prefix: "/api/v1/ddd",
+  prefix: "/api/v1/ddd_upload",
 });
 
 app.get("/health", async () => ({ status: "ok" }));

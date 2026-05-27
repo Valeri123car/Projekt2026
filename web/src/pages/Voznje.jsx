@@ -9,6 +9,7 @@ export default function Voznje() {
   const [error, setError] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [selectedFile, setSelectedFile] = useState(null);
 
   // Filter states
   const [filterDateFrom, setFilterDateFrom] = useState("");
@@ -86,15 +87,14 @@ export default function Voznje() {
     setFilteredVoznje(filtered);
   };
 
-  const handleFileUpload = async (e) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const handleFileUpload = async () => {
+    if (!selectedFile) return;
 
     try {
       setUploadLoading(true);
       setUploadSuccess(false);
       const formData = new FormData();
-      formData.append("file", file);
+      formData.append("file", selectedFile);
 
       await api.post("/ddd_upload/upload", formData, {
         headers: {
@@ -103,8 +103,11 @@ export default function Voznje() {
       });
 
       setUploadSuccess(true);
+      setSelectedFile(null);
       setTimeout(() => setUploadSuccess(false), 3000);
-      e.target.value = ""; // Reset file input
+      // Reset file input
+      const fileInput = document.querySelector('input[type="file"]');
+      if (fileInput) fileInput.value = "";
     } catch (err) {
       setError(err.response?.data?.error || "Napaka pri nalaganju datoteke");
       console.error("Error uploading file:", err);
@@ -147,11 +150,11 @@ export default function Voznje() {
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Naloži DDD ali Excel datoteko
           </label>
-          <div className="flex gap-2 items-center">
+          <div className="flex gap-3 items-center">
             <input
               type="file"
               accept=".ddd,.xlsx,.xls"
-              onChange={handleFileUpload}
+              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
               disabled={uploadLoading}
               className="block text-sm text-gray-500
                 file:mr-4 file:py-2 file:px-4 file:rounded-lg
@@ -160,9 +163,13 @@ export default function Voznje() {
                 hover:file:bg-blue-100
                 disabled:opacity-50 disabled:cursor-not-allowed"
             />
-            {uploadLoading && (
-              <span className="text-sm text-gray-600">Nalaganje...</span>
-            )}
+            <button
+              onClick={handleFileUpload}
+              disabled={!selectedFile || uploadLoading}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+            >
+              {uploadLoading ? "Nalaganje..." : "Naloži"}
+            </button>
           </div>
         </div>
 
@@ -325,9 +332,10 @@ export default function Voznje() {
                 </tr>
               ))}
             </tbody>
-      </main>  </table>
+          </table>
         </div>
       )}
+      </main>
     </div>
   );
 }
