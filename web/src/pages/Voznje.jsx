@@ -24,6 +24,10 @@ export default function Voznje() {
   const [selectedMonthVoznik, setSelectedMonthVoznik] = useState("");
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
 
+  // Export states
+  const [selectedExportVozniki, setSelectedExportVozniki] = useState([]);
+  const [selectedExportMonth, setSelectedExportMonth] = useState(new Date().toISOString().slice(0, 7));
+
   // Get unique vozniki for filter dropdown
   const uniqueVozniki = Array.from(
     new Set(voznje.map((v) => JSON.stringify({ id: v.fk_uporabnik, ime: v.uporabnik?.ime, priimek: v.uporabnik?.priimek })))
@@ -50,6 +54,30 @@ export default function Voznje() {
       console.error("Error fetching voznje:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleExportMonthlyReport = async () => {
+    if (selectedExportVozniki.length === 0) {
+      alert("Izberi vsaj enega voznika");
+      return;
+    }
+
+    try {
+      const [year, month] = selectedExportMonth.split("-").map(Number);
+      const firstDay = new Date(year, month - 1, 1).toISOString().split("T")[0];
+      const lastDay = new Date(year, month, 0).toISOString().split("T")[0];
+
+      const params = new URLSearchParams();
+      selectedExportVozniki.forEach((id) => params.append("fk_uporabnik", id));
+      params.append("od", firstDay);
+      params.append("do", lastDay);
+
+      const response = await api.get(`/voznje/voznjeMesec?${params.toString()}`);
+      console.log("Monthly report data:", response.data);
+    } catch (err) {
+      console.error("Error exporting monthly report:", err);
+      alert("Napaka pri izvozu mesečnega poročila");
     }
   };
 
@@ -203,31 +231,81 @@ export default function Voznje() {
           </div>
         )}
 
-        {/* Upload Section */}
-        <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Naloži DDD ali Excel datoteko
-          </label>
-          <div className="flex gap-3 items-center">
-            <input
-              type="file"
-              accept=".ddd,.DDD,.xlsx,.xls"
-              onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-              disabled={uploadLoading}
-              className="block text-sm text-gray-500
-                file:mr-4 file:py-2 file:px-4 file:rounded-lg
-                file:border-0 file:text-sm file:font-semibold
-                file:bg-blue-50 file:text-blue-700
-                hover:file:bg-blue-100
-                disabled:opacity-50 disabled:cursor-not-allowed"
-            />
-            <button
-              onClick={handleFileUpload}
-              disabled={!selectedFile || uploadLoading}
-              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-            >
-              {uploadLoading ? "Nalaganje..." : "Naloži"}
-            </button>
+        {/* Upload and Export Section */}
+        <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Upload Section */}
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Naloži DDD ali Excel datoteko
+            </label>
+            <div className="flex gap-3 items-center">
+              <input
+                type="file"
+                accept=".ddd,.DDD,.xlsx,.xls"
+                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                disabled={uploadLoading}
+                className="block text-sm text-gray-500
+                  file:mr-4 file:py-2 file:px-4 file:rounded-lg
+                  file:border-0 file:text-sm file:font-semibold
+                  file:bg-blue-50 file:text-blue-700
+                  hover:file:bg-blue-100
+                  disabled:opacity-50 disabled:cursor-not-allowed"
+              />
+              <button
+                onClick={handleFileUpload}
+                disabled={!selectedFile || uploadLoading}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
+              >
+                {uploadLoading ? "Nalaganje..." : "Naloži"}
+              </button>
+            </div>
+          </div>
+
+          {/* Export Monthly Report Section */}
+          <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Izvozi mesečno poročilo
+            </label>
+            <div className="flex gap-3 items-center">
+              {/* Vozniki Selection */}
+              <select
+                multiple
+                value={selectedExportVozniki.map(String)}
+                onChange={(e) =>
+                  setSelectedExportVozniki(
+                    Array.from(e.target.selectedOptions, (option) =>
+                      parseInt(option.value)
+                    )
+                  )
+                }
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                size={1}
+              >
+                <option value="">Izberi voznika...</option>
+                {uniqueVozniki.map((voznik) => (
+                  <option key={voznik.id} value={voznik.id}>
+                    {voznik.ime} {voznik.priimek}
+                  </option>
+                ))}
+              </select>
+
+              {/* Month Selection */}
+              <input
+                type="month"
+                value={selectedExportMonth}
+                onChange={(e) => setSelectedExportMonth(e.target.value)}
+                className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+
+              {/* Export Button */}
+              <button
+                onClick={handleExportMonthlyReport}
+                disabled={selectedExportVozniki.length === 0}
+                className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed transition whitespace-nowrap"
+              >
+                Izvozi
+              </button>
+            </div>
           </div>
         </div>
 
