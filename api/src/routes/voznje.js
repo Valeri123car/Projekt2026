@@ -1,5 +1,5 @@
 export default async function voznje(app) {
-  const protected = async (request, reply) => {
+  const protectedOnly = async (request, reply) => {
     if (request.user.vloga !== 2 || request.user.vloga !== 1) {
       return reply
         .code(403)
@@ -104,7 +104,7 @@ export default async function voznje(app) {
   app.get(
     "/voznjeMesec",
     {
-      onRequest: [app.authenticate, protected],
+      onRequest: [app.authenticate, protectedOnly],
       schema: {
         description: "Vrni vse vožnje za izbrane voznike v danem obdobju",
         querystring: {
