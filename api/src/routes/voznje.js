@@ -113,12 +113,12 @@ export default async function voznje(app) {
           properties: {
             fk_uporabnik: {
               oneOf: [
-                { type: "integer" },
-                { type: "array", items: { type: "integer" } },
+                { type: "string" },
+                { type: "array", items: { type: "string" } },
               ],
             },
-            od: { type: "string", format: "date" },
-            do: { type: "string", format: "date" },
+            od: { type: "string" },
+            do: { type: "string" },
           },
         },
       },
@@ -127,15 +127,14 @@ export default async function voznje(app) {
       let { fk_uporabnik, od, do: doDate } = request.query;
 
       // Handle single or multiple user IDs
+      let voznikIds = [];
       if (typeof fk_uporabnik === "string") {
-        fk_uporabnik = [parseInt(fk_uporabnik)];
+        voznikIds = [parseInt(fk_uporabnik)];
       } else if (Array.isArray(fk_uporabnik)) {
-        fk_uporabnik = fk_uporabnik.map((id) => parseInt(id));
-      } else {
-        fk_uporabnik = [];
+        voznikIds = fk_uporabnik.map((id) => parseInt(id));
       }
 
-      if (fk_uporabnik.length === 0) {
+      if (voznikIds.length === 0) {
         return reply
           .code(400)
           .send({ error: "Vsaj en voznik mora biti izbran" });
@@ -147,7 +146,7 @@ export default async function voznje(app) {
 
       const voznje = await app.prisma.voznja.findMany({
         where: {
-          fk_uporabnik: { in: fk_uporabnik },
+          fk_uporabnik: { in: voznikIds },
           zacetek: {
             gte: fromDate,
             lte: toDate,

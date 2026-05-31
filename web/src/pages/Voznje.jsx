@@ -73,10 +73,12 @@ export default function Voznje() {
       params.append("od", firstDay);
       params.append("do", lastDay);
 
+      console.log("Fetching from:", `/voznje/voznjeMesec?${params.toString()}`);
       const response = await api.get(`/voznje/voznjeMesec?${params.toString()}`);
       console.log("Monthly report data:", response.data);
     } catch (err) {
       console.error("Error exporting monthly report:", err);
+      console.error("Error response:", err.response?.data);
       alert("Napaka pri izvozu mesečnega poročila");
     }
   };
