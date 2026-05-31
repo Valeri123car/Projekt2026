@@ -20,6 +20,10 @@ export default function Voznje() {
   const [filterVoznik, setFilterVoznik] = useState("");
   const [sortBy, setSortBy] = useState("datum-desc");
 
+  // Monthly review states
+  const [selectedMonthVoznik, setSelectedMonthVoznik] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+
   // Get unique vozniki for filter dropdown
   const uniqueVozniki = Array.from(
     new Set(voznje.map((v) => JSON.stringify({ id: v.fk_uporabnik, ime: v.uporabnik?.ime, priimek: v.uporabnik?.priimek })))
@@ -134,6 +138,52 @@ export default function Voznje() {
     return `${datePart} ${timePart}`;
   };
 
+  // Calculate daily driving hours for monthly review
+  const calculateDailyHours = () => {
+    if (!selectedMonthVoznik) return [];
+
+    const [year, month] = selectedMonth.split("-").map(Number);
+    const daysInMonth = new Date(year, month, 0).getDate();
+
+    // Initialize daily hours
+    const dailyHours = {};
+    for (let i = 1; i <= daysInMonth; i++) {
+      dailyHours[i] = 0;
+    }
+
+    // Sum hours for each day
+    voznje.forEach((voznja) => {
+      if (voznja.fk_uporabnik !== parseInt(selectedMonthVoznik)) return;
+
+      const voznjaDate = new Date(voznja.zacetek);
+      const voznjaYear = voznjaDate.getFullYear();
+      const voznjaMonth = voznjaDate.getMonth() + 1;
+
+      if (voznjaYear === year && voznjaMonth === month && (voznja.aktivnost === "Vožnja" || voznja.aktivnost === "Delo")) {
+        const day = voznjaDate.getDate();
+        // Parse trajanje (e.g., "02:30" or "2.5" format) to hours
+        let hours = 0;
+        if (voznja.trajanje) {
+          if (voznja.trajanje.includes(":")) {
+            const parts = voznja.trajanje.split(":");
+            hours = parseInt(parts[0]) + parseInt(parts[1]) / 60;
+          } else {
+            hours = parseFloat(voznja.trajanje);
+          }
+        }
+        dailyHours[day] += hours;
+      }
+    });
+
+    // Convert to array format for chart
+    return Object.entries(dailyHours).map(([day, hours]) => ({
+      day: parseInt(day),
+      hours: Math.round(hours * 100) / 100, // Round to 2 decimals
+    }));
+  };
+
+  const dailyHoursData = calculateDailyHours();
+
   return (
     <div className="flex">
       <Sidebar />
@@ -161,7 +211,7 @@ export default function Voznje() {
           <div className="flex gap-3 items-center">
             <input
               type="file"
-              accept=".ddd,.xlsx,.xls"
+              accept=".ddd,.DDD,.xlsx,.xls"
               onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
               disabled={uploadLoading}
               className="block text-sm text-gray-500
@@ -373,6 +423,171 @@ export default function Voznje() {
           </table>
         </div>
       )}
+
+      {/* Monthly Review Section */}
+      <div className="mt-12 p-6 bg-gray-50 rounded-lg border border-gray-200">
+        <h2 className="text-2xl font-bold text-gray-900 mb-6">Mesečni pregled</h2>
+
+        {/* Controls */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+          {/* Driver Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Voznik
+            </label>
+            <select
+              value={selectedMonthVoznik}
+              onChange={(e) => setSelectedMonthVoznik(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="">Izberi voznika...</option>
+              {uniqueVozniki.map((voznik) => (
+                <option key={voznik.id} value={voznik.id}>
+                  {voznik.ime} {voznik.priimek}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Month Selection */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Mesec
+            </label>
+            <input
+              type="month"
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            />
+          </div>
+        </div>
+
+        {/* Chart */}
+        {selectedMonthVoznik ? (
+          <div className="bg-white p-6 rounded-lg border border-gray-200">
+            <svg className="w-full h-96" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid meet">
+              {/* Background */}
+              <rect width="1200" height="400" fill="white" />
+
+              {/* Y-axis */}
+              <line x1="60" y1="20" x2="60" y2="350" stroke="#ccc" strokeWidth="2" />
+              {/* X-axis */}
+              <line x1="60" y1="350" x2="1180" y2="350" stroke="#ccc" strokeWidth="2" />
+
+              {/* Red line at 8 hours */}
+              {(() => {
+                const maxHours = Math.max(12, Math.max(...dailyHoursData.map((d) => d.hours), 0));
+                const eightHourPixels = 350 - (8 / maxHours) * 330;
+                return (
+                  <>
+                    <line
+                      x1="60"
+                      y1={eightHourPixels}
+                      x2="1180"
+                      y2={eightHourPixels}
+                      stroke="#ef4444"
+                      strokeWidth="2"
+                      strokeDasharray="5,5"
+                    />
+                    <text
+                      x="20"
+                      y={eightHourPixels + 4}
+                      fontSize="12"
+                      fill="#ef4444"
+                      fontWeight="bold"
+                    >
+                      8h
+                    </text>
+                  </>
+                );
+              })()}
+
+              {/* Y-axis labels and grid */}
+              {(() => {
+                const maxHours = Math.max(12, Math.max(...dailyHoursData.map((d) => d.hours), 0));
+                const step = maxHours <= 12 ? 2 : maxHours <= 24 ? 4 : 6;
+                const labels = [];
+                for (let i = 0; i <= maxHours; i += step) {
+                  labels.push(i);
+                }
+                return labels.map((label) => {
+                  const y = 350 - (label / maxHours) * 330;
+                  return (
+                    <g key={label}>
+                      <line x1="55" y1={y} x2="60" y2={y} stroke="#999" strokeWidth="1" />
+                      <text
+                        x="10"
+                        y={y + 4}
+                        fontSize="12"
+                        fill="#666"
+                        textAnchor="end"
+                      >
+                        {label}h
+                      </text>
+                    </g>
+                  );
+                });
+              })()}
+
+              {/* Bars */}
+              {dailyHoursData.map((data, index) => {
+                const maxHours = Math.max(12, Math.max(...dailyHoursData.map((d) => d.hours), 0));
+                const barWidth = (1120 / dailyHoursData.length) * 0.8;
+                const barSpacing = 1120 / dailyHoursData.length;
+                const x = 60 + index * barSpacing + (barSpacing - barWidth) / 2;
+                const barHeight = (data.hours / maxHours) * 330;
+                const y = 350 - barHeight;
+                const isOverEight = data.hours > 8;
+
+                return (
+                  <g key={data.day}>
+                    {/* Bar */}
+                    <rect
+                      x={x}
+                      y={y}
+                      width={barWidth}
+                      height={barHeight}
+                      fill={isOverEight ? "#ef4444" : "#3b82f6"}
+                      rx="4"
+                    />
+                    {/* Day label */}
+                    <text
+                      x={x + barWidth / 2}
+                      y="370"
+                      fontSize="12"
+                      fill="#666"
+                      textAnchor="middle"
+                    >
+                      {data.day}
+                    </text>
+                    {/* Hours label on bar */}
+                    {data.hours > 0 && (
+                      <text
+                        x={x + barWidth / 2}
+                        y={y - 5}
+                        fontSize="11"
+                        fill={isOverEight ? "#ef4444" : "#3b82f6"}
+                        textAnchor="middle"
+                        fontWeight="bold"
+                      >
+                        {data.hours.toFixed(1)}h
+                      </text>
+                    )}
+                  </g>
+                );
+              })}
+            </svg>
+            <div className="mt-4 text-sm text-gray-600">
+              <p>Modre stolpce = do 8 ur/dan | Rdeče stolpce = več kot 8 ur/dan | Rdeča črta = 8h meja</p>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-12 text-gray-600">
+            Izberi voznika za prikaz podatkov
+          </div>
+        )}
+      </div>
       </main>
     </div>
   );

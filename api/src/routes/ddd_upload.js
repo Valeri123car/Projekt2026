@@ -35,13 +35,14 @@ export default async function dddUpload(app) {
         }
 
 
-        const isDDD = data.filename.endsWith(".DDD");
-        const isExcel = data.filename.endsWith(".xlsx") || data.filename.endsWith(".xls");
+        const filename = data.filename.toLowerCase();
+        const isDDD = filename.endsWith(".ddd");
+        const isExcel = filename.endsWith(".xlsx") || filename.endsWith(".xls");
 
         if (!isDDD && !isExcel) {
           return reply
             .code(400)
-            .send({ error: "Datoteka mora biti .ddd ali .xlsx formata" });
+            .send({ error: "Datoteka mora biti .DDD ali .xlsx formata" });
         }
 
    
