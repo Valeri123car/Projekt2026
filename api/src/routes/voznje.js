@@ -111,12 +111,6 @@ export default async function voznje(app) {
           type: "object",
           required: ["od", "do"],
           properties: {
-            fk_uporabnik: {
-              oneOf: [
-                { type: "string" },
-                { type: "array", items: { type: "string" } },
-              ],
-            },
             od: { type: "string" },
             do: { type: "string" },
           },
