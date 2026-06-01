@@ -21,9 +21,6 @@ export default function Voznje() {
   const [filterVoznik, setFilterVoznik] = useState("");
   const [sortBy, setSortBy] = useState("datum-desc");
 
-  const [selectedMonthVoznik, setSelectedMonthVoznik] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
-
   const [selectedExportVozniki, setSelectedExportVozniki] = useState([]);
   const [selectedExportMonth, setSelectedExportMonth] = useState(new Date().toISOString().slice(0, 7));
 
@@ -32,7 +29,6 @@ export default function Voznje() {
   ).map((v) => JSON.parse(v)).sort((a, b) => (a.ime + a.priimek).localeCompare(b.ime + b.priimek));
 
   useEffect(() => { fetchVoznje(); }, []);
-
   useEffect(() => { applyFiltersAndSort(); }, [voznje, filterDateFrom, filterDateTo, filterVoznik, sortBy]);
 
   const fetchVoznje = async () => {
@@ -49,10 +45,7 @@ export default function Voznje() {
   };
 
   const handleExportMonthlyReport = async () => {
-    if (selectedExportVozniki.length === 0) {
-      alert("Izberi vsaj enega voznika");
-      return;
-    }
+    if (selectedExportVozniki.length === 0) { alert("Izberi vsaj enega voznika"); return; }
     try {
       const [year, month] = selectedExportMonth.split("-").map(Number);
       const firstDay = new Date(year, month - 1, 1).toISOString().split("T")[0];
@@ -62,39 +55,30 @@ export default function Voznje() {
       params.append("od", firstDay);
       params.append("do", lastDay);
       await api.get(`/voznje/voznjeMesec?${params.toString()}`);
-    } catch (err) {
+    } catch {
       alert("Napaka pri izvozu mesečnega poročila");
     }
   };
 
   const applyFiltersAndSort = () => {
     let filtered = [...voznje];
-
-    if (filterDateFrom) {
-      filtered = filtered.filter((v) => new Date(v.datum) >= new Date(filterDateFrom));
-    }
+    if (filterDateFrom) filtered = filtered.filter((v) => new Date(v.datum) >= new Date(filterDateFrom));
     if (filterDateTo) {
       const dateTo = new Date(filterDateTo);
       dateTo.setHours(23, 59, 59, 999);
       filtered = filtered.filter((v) => new Date(v.datum) <= dateTo);
     }
-    if (filterVoznik) {
-      filtered = filtered.filter((v) => v.fk_uporabnik === parseInt(filterVoznik));
-    }
+    if (filterVoznik) filtered = filtered.filter((v) => v.fk_uporabnik === parseInt(filterVoznik));
 
     const [sortField, sortOrder] = sortBy.split("-");
     filtered.sort((a, b) => {
       let aVal = a[sortField];
       let bVal = b[sortField];
-      if (["datum", "zacetek", "konc"].includes(sortField)) {
-        aVal = new Date(aVal);
-        bVal = new Date(bVal);
-      }
+      if (["datum", "zacetek", "konc"].includes(sortField)) { aVal = new Date(aVal); bVal = new Date(bVal); }
       if (aVal < bVal) return sortOrder === "asc" ? -1 : 1;
       if (aVal > bVal) return sortOrder === "asc" ? 1 : -1;
       return 0;
     });
-
     setFilteredVoznje(filtered);
   };
 
@@ -107,13 +91,11 @@ export default function Voznje() {
       await api.get("/ddd_upload/test-upload");
       const formData = new FormData();
       formData.append("file", selectedFile);
-      await api.post("/ddd_upload/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      await api.post("/ddd_upload/upload", formData, { headers: { "Content-Type": "multipart/form-data" } });
       setUploadSuccess(true);
       setSelectedFile(null);
-      const fileInput = document.querySelector('input[type="file"]');
-      if (fileInput) fileInput.value = "";
+      const fi = document.querySelector('input[type="file"]');
+      if (fi) fi.value = "";
       setTimeout(() => setUploadSuccess(false), 3000);
     } catch (err) {
       setError(err.response?.data?.error || "Napaka pri nalaganju datoteke");
@@ -127,37 +109,35 @@ export default function Voznje() {
     return date.toLocaleDateString("sl-SI") + " " + date.toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" });
   };
 
-  const calculateDailyHours = () => {
-    if (!selectedMonthVoznik) return [];
-    const [year, month] = selectedMonth.split("-").map(Number);
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const dailyHours = {};
-    for (let i = 1; i <= daysInMonth; i++) dailyHours[i] = 0;
-
-    voznje.forEach((voznja) => {
-      if (voznja.fk_uporabnik !== parseInt(selectedMonthVoznik)) return;
-      const d = new Date(voznja.zacetek);
-      if (d.getFullYear() !== year || d.getMonth() + 1 !== month) return;
-      if (voznja.aktivnost !== "Vožnja" && voznja.aktivnost !== "Delo") return;
-      let hours = 0;
-      if (voznja.trajanje) {
-        if (voznja.trajanje.includes(":")) {
-          const parts = voznja.trajanje.split(":");
-          hours = parseInt(parts[0]) + parseInt(parts[1]) / 60;
-        } else {
-          hours = parseFloat(voznja.trajanje);
-        }
-      }
-      dailyHours[d.getDate()] += hours;
+  const izracunajVoznjePoMesecih = () => {
+    const meseci = {};
+    voznje.forEach((v) => {
+      const mesec = new Date(v.zacetek).toISOString().slice(0, 7);
+      if (!meseci[mesec]) meseci[mesec] = 0;
+      meseci[mesec]++;
     });
-
-    return Object.entries(dailyHours).map(([day, hours]) => ({
-      day: parseInt(day),
-      hours: Math.round(hours * 100) / 100,
-    }));
+    return Object.entries(meseci)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([mesec, stevilo]) => ({
+        mesec,
+        label: new Date(mesec + "-01").toLocaleDateString("sl-SI", { month: "short", year: "2-digit" }),
+        stevilo,
+      }));
   };
 
-  const dailyHoursData = calculateDailyHours();
+  const izracunajTrajanje = (zacetek, konec) => {
+  if (!zacetek || !konec) return "-";
+  const diff = Math.floor((new Date(konec) - new Date(zacetek)) / 60000);
+  if (diff <= 0) return "-";
+  const h = Math.floor(diff / 60);
+  const m = diff % 60;
+  if (h === 0) return `${m}min`;
+  return `${h}h ${m}min`;
+};
+
+  const voznjePoMesecih = izracunajVoznjePoMesecih();
+  const maxVoznje = Math.max(1, ...voznjePoMesecih.map((m) => m.stevilo));
 
   return (
     <div className="flex">
@@ -165,25 +145,16 @@ export default function Voznje() {
       <main className="ml-72 flex-1 p-8 bg-gray-50 min-h-screen">
         <div className="mb-6">
           <h1 className="text-3xl font-bold text-gray-900 mb-4">Vožnje</h1>
-
           <div className="flex gap-1 mb-6 border-b border-gray-200">
             <button
               onClick={() => setActiveTab("voznje")}
-              className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
-                activeTab === "voznje"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
+              className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${activeTab === "voznje" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
             >
               Vožnje
             </button>
             <button
               onClick={() => setActiveTab("tahograf")}
-              className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${
-                activeTab === "tahograf"
-                  ? "border-blue-600 text-blue-600"
-                  : "border-transparent text-gray-500 hover:text-gray-700"
-              }`}
+              className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${activeTab === "tahograf" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
             >
               Tahografski zapisi
             </button>
@@ -194,75 +165,38 @@ export default function Voznje() {
           <TahografAdmin />
         ) : (
           <>
-            {error && (
-              <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">
-                {error}
-              </div>
-            )}
-
-            {uploadSuccess && (
-              <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">
-                Datoteka je bila uspešno naložena
-              </div>
-            )}
+            {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">{error}</div>}
+            {uploadSuccess && <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">Datoteka je bila uspešno naložena</div>}
 
             <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Naloži DDD ali Excel datoteko
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Naloži DDD ali Excel datoteko</label>
                 <div className="flex gap-3 items-center">
-                  <input
-                    type="file"
-                    accept=".ddd,.DDD,.xlsx,.xls"
+                  <input type="file" accept=".ddd,.DDD,.xlsx,.xls"
                     onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                     disabled={uploadLoading}
                     className="block text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
                   />
-                  <button
-                    onClick={handleFileUpload}
-                    disabled={!selectedFile || uploadLoading}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                  >
+                  <button onClick={handleFileUpload} disabled={!selectedFile || uploadLoading}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
                     {uploadLoading ? "Nalaganje..." : "Naloži"}
                   </button>
                 </div>
               </div>
 
               <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Izvozi mesečno poročilo
-                </label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Izvozi mesečno poročilo</label>
                 <div className="flex gap-3 items-center">
-                  <select
-                    multiple
-                    value={selectedExportVozniki.map(String)}
-                    onChange={(e) =>
-                      setSelectedExportVozniki(
-                        Array.from(e.target.selectedOptions, (o) => parseInt(o.value))
-                      )
-                    }
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    size={1}
-                  >
+                  <select multiple value={selectedExportVozniki.map(String)}
+                    onChange={(e) => setSelectedExportVozniki(Array.from(e.target.selectedOptions, (o) => parseInt(o.value)))}
+                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" size={1}>
                     <option value="">Izberi voznika...</option>
-                    {uniqueVozniki.map((voznik) => (
-                      <option key={voznik.id} value={voznik.id}>
-                        {voznik.ime} {voznik.priimek}
-                      </option>
-                    ))}
+                    {uniqueVozniki.map((v) => <option key={v.id} value={v.id}>{v.ime} {v.priimek}</option>)}
                   </select>
-                  <input
-                    type="month"
-                    value={selectedExportMonth}
-                    onChange={(e) => setSelectedExportMonth(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  <button
-                    onClick={handleExportMonthlyReport}
-                    disabled={selectedExportVozniki.length === 0}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap"
-                  >
+                  <input type="month" value={selectedExportMonth} onChange={(e) => setSelectedExportMonth(e.target.value)}
+                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <button onClick={handleExportMonthlyReport} disabled={selectedExportVozniki.length === 0}
+                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
                     Izvozi
                   </button>
                 </div>
@@ -274,62 +208,34 @@ export default function Voznje() {
               <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Od datuma</label>
-                  <input
-                    type="date"
-                    value={filterDateFrom}
-                    onChange={(e) => setFilterDateFrom(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <input type="date" value={filterDateFrom} onChange={(e) => setFilterDateFrom(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Do datuma</label>
-                  <input
-                    type="date"
-                    value={filterDateTo}
-                    onChange={(e) => setFilterDateTo(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
+                  <input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Voznik</label>
-                  <select
-                    value={filterVoznik}
-                    onChange={(e) => setFilterVoznik(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
+                  <select value={filterVoznik} onChange={(e) => setFilterVoznik(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="">Vsi vozniki</option>
-                    {uniqueVozniki.map((voznik) => (
-                      <option key={voznik.id} value={voznik.id}>
-                        {voznik.ime} {voznik.priimek}
-                      </option>
-                    ))}
+                    {uniqueVozniki.map((v) => <option key={v.id} value={v.id}>{v.ime} {v.priimek}</option>)}
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Razvrsti po</label>
-                  <select
-                    value={sortBy}
-                    onChange={(e) => setSortBy(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
+                  <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="datum-desc">Datum (najnovejše)</option>
                     <option value="datum-asc">Datum (najstarejše)</option>
-                    <option value="trajanje-desc">Trajanje (najdlje)</option>
-                    <option value="trajanje-asc">Trajanje (najkrajše)</option>
                     <option value="stranka-asc">Stranka (A-Z)</option>
                   </select>
                 </div>
                 <div className="flex items-end">
-                  <button
-                    onClick={() => {
-                      setFilterDateFrom("");
-                      setFilterDateTo("");
-                      setFilterVoznik("");
-                      setSortBy("datum-desc");
-                      setCurrentPage(1);
-                    }}
-                    className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg"
-                  >
+                  <button onClick={() => { setFilterDateFrom(""); setFilterDateTo(""); setFilterVoznik(""); setSortBy("datum-desc"); setCurrentPage(1); }}
+                    className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg">
                     Počisti
                   </button>
                 </div>
@@ -338,32 +244,15 @@ export default function Voznje() {
 
             <div className="mb-4 flex items-center justify-between text-sm text-gray-600">
               <div>
-                Prikazane vožnje:{" "}
-                <strong>
-                  {Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredVoznje.length)}–
-                  {Math.min(currentPage * ITEMS_PER_PAGE, filteredVoznje.length)}
-                </strong>{" "}
-                od <strong>{filteredVoznje.length}</strong> (skupaj {voznje.length})
+                Prikazane vožnje: <strong>{Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filteredVoznje.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, filteredVoznje.length)}</strong> od <strong>{filteredVoznje.length}</strong> (skupaj {voznje.length})
               </div>
               <div className="flex gap-2 items-center">
-                <button
-                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1}
-                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Prejšnja
-                </button>
-                <span className="px-3 py-1">
-                  Stran <strong>{currentPage}</strong> od{" "}
-                  <strong>{Math.ceil(filteredVoznje.length / ITEMS_PER_PAGE) || 1}</strong>
-                </span>
-                <button
-                  onClick={() => setCurrentPage(Math.min(Math.ceil(filteredVoznje.length / ITEMS_PER_PAGE), currentPage + 1))}
+                <button onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}
+                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded disabled:opacity-50 disabled:cursor-not-allowed">Prejšnja</button>
+                <span className="px-3 py-1">Stran <strong>{currentPage}</strong> od <strong>{Math.ceil(filteredVoznje.length / ITEMS_PER_PAGE) || 1}</strong></span>
+                <button onClick={() => setCurrentPage(Math.min(Math.ceil(filteredVoznje.length / ITEMS_PER_PAGE), currentPage + 1))}
                   disabled={currentPage >= Math.ceil(filteredVoznje.length / ITEMS_PER_PAGE)}
-                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  Naslednja
-                </button>
+                  className="px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded disabled:opacity-50 disabled:cursor-not-allowed">Naslednja</button>
               </div>
             </div>
 
@@ -382,115 +271,61 @@ export default function Voznje() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredVoznje
-                      .slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE)
-                      .map((voznja) => (
-                        <tr key={voznja.id_voznja} className="border-b border-gray-200 hover:bg-gray-50">
-                          <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                            {voznja.uporabnik ? `${voznja.uporabnik.ime} ${voznja.uporabnik.priimek}` : "-"}
-                          </td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{formatDateTime(voznja.zacetek)}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{formatDateTime(voznja.konc)}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{voznja.trajanje || "-"}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{voznja.relacija || "-"}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700">{voznja.stranka || "-"}</td>
-                          <td className="px-6 py-4 text-sm text-gray-700 max-w-xs truncate">{voznja.opis || "-"}</td>
-                        </tr>
-                      ))}
+                    {filteredVoznje.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((v) => (
+                      <tr key={v.id_voznja} className="border-b border-gray-200 hover:bg-gray-50">
+                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{v.uporabnik ? `${v.uporabnik.ime} ${v.uporabnik.priimek}` : "-"}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700">{formatDateTime(v.zacetek)}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700">{formatDateTime(v.konc)}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700">{izracunajTrajanje(v.zacetek, v.konc)}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700">{v.relacija || "-"}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700">{v.stranka || "-"}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700 max-w-xs truncate">{v.opis || "-"}</td>
+                      </tr>
+                    ))}
                   </tbody>
                 </table>
               </div>
             )}
 
-            <div className="mt-12 p-6 bg-gray-50 rounded-lg border border-gray-200">
-              <h2 className="text-2xl font-bold text-gray-900 mb-6">Mesečni pregled</h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Voznik</label>
-                  <select
-                    value={selectedMonthVoznik}
-                    onChange={(e) => setSelectedMonthVoznik(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  >
-                    <option value="">Izberi voznika...</option>
-                    {uniqueVozniki.map((voznik) => (
-                      <option key={voznik.id} value={voznik.id}>
-                        {voznik.ime} {voznik.priimek}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Mesec</label>
-                  <input
-                    type="month"
-                    value={selectedMonth}
-                    onChange={(e) => setSelectedMonth(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-              </div>
-
-              {selectedMonthVoznik ? (
+            {voznjePoMesecih.length > 0 && (
+              <div className="mt-12 p-6 bg-gray-50 rounded-lg border border-gray-200">
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Vožnje po mesecih</h2>
+                <p className="text-sm text-gray-500 mb-6">Število ročno vnesenih voženj v zadnjih 12 mesecih</p>
                 <div className="bg-white p-6 rounded-lg border border-gray-200">
-                  <svg className="w-full h-96" viewBox="0 0 1200 400" preserveAspectRatio="xMidYMid meet">
-                    <rect width="1200" height="400" fill="white" />
-                    <line x1="60" y1="20" x2="60" y2="350" stroke="#ccc" strokeWidth="2" />
-                    <line x1="60" y1="350" x2="1180" y2="350" stroke="#ccc" strokeWidth="2" />
-                    {(() => {
-                      const maxHours = Math.max(12, Math.max(...dailyHoursData.map((d) => d.hours), 0));
-                      const y8 = 350 - (8 / maxHours) * 330;
+                  <svg className="w-full h-64" viewBox="0 0 1200 300" preserveAspectRatio="xMidYMid meet">
+                    <rect width="1200" height="300" fill="white" />
+                    <line x1="60" y1="20" x2="60" y2="240" stroke="#e5e7eb" strokeWidth="1" />
+                    <line x1="60" y1="240" x2="1180" y2="240" stroke="#e5e7eb" strokeWidth="1" />
+                    {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
+                      const val = Math.round(maxVoznje * frac);
+                      const y = 240 - frac * 220;
                       return (
-                        <>
-                          <line x1="60" y1={y8} x2="1180" y2={y8} stroke="#ef4444" strokeWidth="2" strokeDasharray="5,5" />
-                          <text x="20" y={y8 + 4} fontSize="12" fill="#ef4444" fontWeight="bold">8h</text>
-                        </>
+                        <g key={frac}>
+                          <line x1="60" y1={y} x2="1180" y2={y} stroke="#f3f4f6" strokeWidth="1" />
+                          <text x="52" y={y + 4} fontSize="11" fill="#9ca3af" textAnchor="end">{val}</text>
+                        </g>
                       );
-                    })()}
-                    {(() => {
-                      const maxHours = Math.max(12, Math.max(...dailyHoursData.map((d) => d.hours), 0));
-                      const step = maxHours <= 12 ? 2 : maxHours <= 24 ? 4 : 6;
-                      const labels = [];
-                      for (let i = 0; i <= maxHours; i += step) labels.push(i);
-                      return labels.map((label) => {
-                        const y = 350 - (label / maxHours) * 330;
-                        return (
-                          <g key={label}>
-                            <line x1="55" y1={y} x2="60" y2={y} stroke="#999" strokeWidth="1" />
-                            <text x="10" y={y + 4} fontSize="12" fill="#666" textAnchor="end">{label}h</text>
-                          </g>
-                        );
-                      });
-                    })()}
-                    {dailyHoursData.map((data, index) => {
-                      const maxHours = Math.max(12, Math.max(...dailyHoursData.map((d) => d.hours), 0));
-                      const barWidth = (1120 / dailyHoursData.length) * 0.8;
-                      const barSpacing = 1120 / dailyHoursData.length;
-                      const x = 60 + index * barSpacing + (barSpacing - barWidth) / 2;
-                      const barHeight = (data.hours / maxHours) * 330;
-                      const y = 350 - barHeight;
-                      const isOver = data.hours > 8;
+                    })}
+                    {voznjePoMesecih.map((m, i) => {
+                      const barWidth = (1120 / voznjePoMesecih.length) * 0.6;
+                      const barSpacing = 1120 / voznjePoMesecih.length;
+                      const x = 60 + i * barSpacing + (barSpacing - barWidth) / 2;
+                      const barH = (m.stevilo / maxVoznje) * 220;
+                      const y = 240 - barH;
                       return (
-                        <g key={data.day}>
-                          <rect x={x} y={y} width={barWidth} height={barHeight} fill={isOver ? "#ef4444" : "#3b82f6"} rx="4" />
-                          <text x={x + barWidth / 2} y="370" fontSize="12" fill="#666" textAnchor="middle">{data.day}</text>
-                          {data.hours > 0 && (
-                            <text x={x + barWidth / 2} y={y - 5} fontSize="11" fill={isOver ? "#ef4444" : "#3b82f6"} textAnchor="middle" fontWeight="bold">
-                              {data.hours.toFixed(1)}h
-                            </text>
+                        <g key={m.mesec}>
+                          <rect x={x} y={y} width={barWidth} height={barH} fill="#2563eb" rx="4" opacity="0.85" />
+                          <text x={x + barWidth / 2} y="258" fontSize="11" fill="#6b7280" textAnchor="middle">{m.label}</text>
+                          {m.stevilo > 0 && (
+                            <text x={x + barWidth / 2} y={y - 5} fontSize="11" fill="#2563eb" textAnchor="middle" fontWeight="bold">{m.stevilo}</text>
                           )}
                         </g>
                       );
                     })}
                   </svg>
-                  <div className="mt-4 text-sm text-gray-600">
-                    Modri stolpci = do 8 ur/dan | Rdeči stolpci = več kot 8 ur/dan | Rdeča črta = 8h meja
-                  </div>
                 </div>
-              ) : (
-                <div className="text-center py-12 text-gray-600">Izberi voznika za prikaz podatkov</div>
-              )}
-            </div>
+              </div>
+            )}
           </>
         )}
       </main>

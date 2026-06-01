@@ -19,6 +19,7 @@ export function useSinhronizacija(onSinhronizacija) {
           await api.post("/tahograf/zacni", {
             stanje: akcija.stanje,
             cas_akcije: akcija.cas,
+            registrska: akcija.registrska || undefined,
           });
         } else if (akcija.tip === "zakljuci") {
           await api.post("/tahograf/zakljuci", {

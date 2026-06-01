@@ -8,6 +8,8 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Modal,
+  TextInput,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import api from "../api/client";
@@ -81,7 +83,6 @@ function formatTrajanjeNatancno(zapis) {
 }
 
 export default function TahografScreen() {
-  useSinhronizacija(naloziPodatke);
   const [aktivno, setAktivno] = useState(null);
   const [povzetek, setPovzetek] = useState(null);
   const [zgodovina, setZgodovina] = useState([]);
@@ -89,6 +90,9 @@ export default function TahografScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [menjiLoading, setMenjiLoading] = useState(false);
+  const [registrskaModal, setRegistrskaModal] = useState(false);
+  const [registrskaVnos, setRegistrskaVnos] = useState("");
+  const [cakajociStanje, setCakajociStanje] = useState(null);
 
   const naloziPodatke = useCallback(async () => {
     const cakajoci = await preberiCakajoche();
@@ -116,6 +120,8 @@ export default function TahografScreen() {
     }
   }, []);
 
+  useSinhronizacija(naloziPodatke);
+
   useEffect(() => {
     naloziPodatke();
   }, [naloziPodatke]);
@@ -136,66 +142,56 @@ export default function TahografScreen() {
     return () => clearInterval(interval);
   }, [aktivno]);
 
+  const izvediZamenjavo = async (novoStanje, registrska) => {
+    setMenjiLoading(true);
+    const zdaj = new Date().toISOString();
+    const noviZapis = {
+      stanje: novoStanje,
+      zacetek: zdaj,
+      konec: null,
+      id_zapis: null,
+      fk_uporabnik: aktivno?.fk_uporabnik,
+      registrska: registrska || null,
+    };
+    await shraniAktivnoLokalno(noviZapis);
+    setAktivno(noviZapis);
+    try {
+      await api.post("/tahograf/zacni", {
+        stanje: novoStanje,
+        registrska: registrska || undefined,
+      });
+      await naloziPodatke();
+    } catch (err) {
+      console.log(
+        "ZACNI ERROR:",
+        err.response?.status,
+        JSON.stringify(err.response?.data),
+      );
+      await dodajCakajoci({
+        tip: "zacni",
+        stanje: novoStanje,
+        cas: zdaj,
+        registrska,
+      });
+      Alert.alert(
+        "Brez signala",
+        "Stanje je shranjeno lokalno. Ob vzpostavitvi povezave se sinhronizira.",
+        [{ text: "OK" }],
+      );
+    } finally {
+      setMenjiLoading(false);
+    }
+  };
+
   const zamenjajStanje = async (novoStanje) => {
     if (aktivno?.stanje === novoStanje) return;
-
     const zahtevaTablica = novoStanje === "VOZNJA" || novoStanje === "DELO";
-
-    const izvediZamenjavo = async (registrska) => {
-      setMenjiLoading(true);
-      const zdaj = new Date().toISOString();
-      const noviZapis = {
-        stanje: novoStanje,
-        zacetek: zdaj,
-        konec: null,
-        id_zapis: null,
-        fk_uporabnik: aktivno?.fk_uporabnik,
-        registrska: registrska || null,
-      };
-      await shraniAktivnoLokalno(noviZapis);
-      setAktivno(noviZapis);
-      try {
-        const res = await api.post("/tahograf/zacni", {
-          stanje: novoStanje,
-          registrska: registrska || undefined,
-        });
-        console.log("ZACNI OK:", JSON.stringify(res.data));
-        await naloziPodatke();
-      } catch (err) {
-        console.log(
-          "ZACNI ERROR:",
-          err.response?.status,
-          JSON.stringify(err.response?.data),
-        );
-        await dodajCakajoci({
-          tip: "zacni",
-          stanje: novoStanje,
-          cas: zdaj,
-          registrska,
-        });
-        Alert.alert(
-          "Brez signala",
-          "Stanje je shranjeno lokalno. Ob vzpostavitvi povezave se sinhronizira.",
-          [{ text: "OK" }],
-        );
-      } finally {
-        setMenjiLoading(false);
-      }
-    };
-
-    if (zahtevaTablica) {
-      Alert.prompt(
-        "Registrska številka",
-        "Vnesite registrsko številko vozila (opcijsko):",
-        [
-          { text: "Preskoči", onPress: () => izvediZamenjavo(null) },
-          { text: "Potrdi", onPress: (vrednost) => izvediZamenjavo(vrednost) },
-        ],
-        "plain-text",
-        aktivno?.registrska || "",
-      );
+    if (zahtevaTablica && !aktivno?.registrska) {
+      setCakajociStanje(novoStanje);
+      setRegistrskaVnos("");
+      setRegistrskaModal(true);
     } else {
-      await izvediZamenjavo(null);
+      await izvediZamenjavo(novoStanje, aktivno?.registrska || null);
     }
   };
 
@@ -209,7 +205,6 @@ export default function TahografScreen() {
           setMenjiLoading(true);
           await izbrisiAktivnoLokalno();
           setAktivno(null);
-
           try {
             await api.post("/tahograf/zakljuci");
             await naloziPodatke();
@@ -291,6 +286,9 @@ export default function TahografScreen() {
                 ? STANJA[aktivnoStanje]?.label
                 : "Ni aktivnega stanja"}
             </Text>
+            {aktivno?.registrska && (
+              <Text style={s.aktivnaRegistrska}>{aktivno.registrska}</Text>
+            )}
           </View>
           <Text style={[s.timer, { color: aktivnaBarva }]}>
             {aktivno ? formatTimer(timer) : "—"}
@@ -481,6 +479,9 @@ export default function TahografScreen() {
                 <Text style={s.zapisCas}>
                   {datum} ob {cas}
                 </Text>
+                {zapis.registrska && (
+                  <Text style={s.zapisRegistrska}>{zapis.registrska}</Text>
+                )}
               </View>
               <View style={s.zapisDesno}>
                 <Text style={s.zapisTrajanje}>{trajanje}</Text>
@@ -494,6 +495,54 @@ export default function TahografScreen() {
           );
         })
       )}
+
+      <Modal
+        visible={registrskaModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setRegistrskaModal(false)}
+      >
+        <View style={s.modalOverlay}>
+          <View style={s.modalKartica}>
+            <Text style={s.modalNaslov}>Registrska številka</Text>
+            <Text style={s.modalPodnaslov}>
+              Vnesite registrsko številko vozila (opcijsko)
+            </Text>
+            <TextInput
+              style={s.modalInput}
+              value={registrskaVnos}
+              onChangeText={setRegistrskaVnos}
+              placeholder="npr. CE 86-VSI"
+              placeholderTextColor="#9e9e9e"
+              autoCapitalize="characters"
+              autoFocus
+            />
+            <View style={s.modalGumbi}>
+              <TouchableOpacity
+                style={s.modalGumbPreskoči}
+                onPress={() => {
+                  setRegistrskaModal(false);
+                  izvediZamenjavo(cakajociStanje, null);
+                }}
+              >
+                <Text style={s.modalGumbPreskočiTxt}>Preskoči</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={s.modalGumbPotrdi}
+                onPress={() => {
+                  setRegistrskaModal(false);
+                  izvediZamenjavo(
+                    cakajociStanje,
+                    registrskaVnos.trim() || null,
+                  );
+                }}
+              >
+                <Text style={s.modalGumbPotrdiTxt}>Potrdi</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
 
       <View style={{ height: 32 }} />
     </ScrollView>
@@ -531,6 +580,12 @@ const s = StyleSheet.create({
     letterSpacing: 1,
   },
   aktivnoStanje: { fontSize: 20, fontWeight: "700", marginTop: 2 },
+  aktivnaRegistrska: {
+    fontSize: 12,
+    color: "#727785",
+    marginTop: 2,
+    fontWeight: "600",
+  },
   timer: { fontSize: 24, fontWeight: "800", fontVariant: ["tabular-nums"] },
   zakljuciBtn: {
     marginTop: 12,
@@ -632,6 +687,23 @@ const s = StyleSheet.create({
   },
   opozoriloBesedilo: { fontSize: 12, color: "#ba1a1a", fontWeight: "600" },
 
+  odmorKartica: {
+    backgroundColor: "#fff8f0",
+    borderRadius: 12,
+    padding: 14,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: "#f0c080",
+  },
+  odmorVrstica: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  odmorNaslov: { fontSize: 14, fontWeight: "700", color: "#855300" },
+  odmorBesedilo: { fontSize: 12, color: "#855300" },
+
   prazno: { alignItems: "center", padding: 24, gap: 8 },
   praznoTxt: { color: "#727785", fontSize: 14 },
 
@@ -656,7 +728,62 @@ const s = StyleSheet.create({
   },
   zapisStanje: { fontSize: 14, fontWeight: "700" },
   zapisCas: { fontSize: 12, color: "#727785", marginTop: 2 },
+  zapisRegistrska: {
+    fontSize: 11,
+    color: "#9e9e9e",
+    marginTop: 1,
+    fontWeight: "600",
+  },
   zapisDesno: { alignItems: "flex-end", gap: 4 },
   zapisTrajanje: { fontSize: 13, fontWeight: "600", color: "#424754" },
   aktivnaPikaMala: { width: 7, height: 7, borderRadius: 4 },
+
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  modalKartica: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    padding: 24,
+    width: "100%",
+  },
+  modalNaslov: {
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#191b23",
+    marginBottom: 6,
+  },
+  modalPodnaslov: { fontSize: 13, color: "#727785", marginBottom: 16 },
+  modalInput: {
+    borderWidth: 1.5,
+    borderColor: "#c2c6d6",
+    borderRadius: 10,
+    padding: 12,
+    fontSize: 16,
+    color: "#191b23",
+    marginBottom: 20,
+    letterSpacing: 1,
+  },
+  modalGumbi: { flexDirection: "row", gap: 12 },
+  modalGumbPreskoči: {
+    flex: 1,
+    borderWidth: 1.5,
+    borderColor: "#c2c6d6",
+    borderRadius: 10,
+    padding: 12,
+    alignItems: "center",
+  },
+  modalGumbPreskočiTxt: { fontSize: 14, fontWeight: "600", color: "#727785" },
+  modalGumbPotrdi: {
+    flex: 1,
+    backgroundColor: "#0058be",
+    borderRadius: 10,
+    padding: 12,
+    alignItems: "center",
+  },
+  modalGumbPotrdiTxt: { fontSize: 14, fontWeight: "700", color: "#fff" },
 });
