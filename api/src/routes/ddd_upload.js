@@ -171,8 +171,16 @@ export default async function dddUpload(app) {
                     .replace("RAZPOLOŽLJIVOST", "RAZPOLOZLJIVOST"),
                   zacetek: new Date(voznja.zacetek),
                   konec: new Date(voznja.konec),
-                  trajanje_min:
-                    voznja.dolzina_min || voznja.trajanje_min || null,
+                  trajanje_min: (() => {
+                    const t = voznja.dolzina || voznja.trajanje;
+                    if (!t) return null;
+                    if (typeof t === "number") return t;
+                    if (typeof t === "string" && t.includes(":")) {
+                      const [h, m] = t.split(":").map(Number);
+                      return h * 60 + m;
+                    }
+                    return null;
+                  })(),
                   registrska: voznja.registerska || null,
                   posadka:
                     voznja.posadka === "Da" || voznja.posadka === true || false,
