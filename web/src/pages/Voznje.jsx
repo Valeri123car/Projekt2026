@@ -126,6 +126,16 @@ export default function Voznje() {
       }));
   };
 
+  const izracunajTrajanje = (zacetek, konec) => {
+  if (!zacetek || !konec) return "-";
+  const diff = Math.floor((new Date(konec) - new Date(zacetek)) / 60000);
+  if (diff <= 0) return "-";
+  const h = Math.floor(diff / 60);
+  const m = diff % 60;
+  if (h === 0) return `${m}min`;
+  return `${h}h ${m}min`;
+};
+
   const voznjePoMesecih = izracunajVoznjePoMesecih();
   const maxVoznje = Math.max(1, ...voznjePoMesecih.map((m) => m.stevilo));
 
@@ -266,7 +276,7 @@ export default function Voznje() {
                         <td className="px-6 py-4 text-sm font-medium text-gray-900">{v.uporabnik ? `${v.uporabnik.ime} ${v.uporabnik.priimek}` : "-"}</td>
                         <td className="px-6 py-4 text-sm text-gray-700">{formatDateTime(v.zacetek)}</td>
                         <td className="px-6 py-4 text-sm text-gray-700">{formatDateTime(v.konc)}</td>
-                        <td className="px-6 py-4 text-sm text-gray-700">{v.trajanje || "-"}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700">{izracunajTrajanje(v.zacetek, v.konc)}</td>
                         <td className="px-6 py-4 text-sm text-gray-700">{v.relacija || "-"}</td>
                         <td className="px-6 py-4 text-sm text-gray-700">{v.stranka || "-"}</td>
                         <td className="px-6 py-4 text-sm text-gray-700 max-w-xs truncate">{v.opis || "-"}</td>
