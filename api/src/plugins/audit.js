@@ -3,6 +3,8 @@ import fp from "fastify-plugin";
 async function auditPlugin(app) {
   app.addHook("onResponse", async (request, reply) => {
     if (!request.user) return;
+    if (!["POST", "PUT", "DELETE", "PATCH"].includes(request.method)) return;
+    if (reply.statusCode >= 400) return;
 
     const obcutljiviEndpointi = [
       "/api/v1/voznje",
@@ -13,13 +15,13 @@ async function auditPlugin(app) {
       "/api/v1/stranke",
       "/api/v1/vozila",
       "/api/v1/urnik",
+      "/api/v1/tahograf",
     ];
 
     const jeObcutljiv = obcutljiviEndpointi.some((e) =>
       request.url.startsWith(e),
     );
     if (!jeObcutljiv) return;
-    if (reply.statusCode >= 400) return;
 
     try {
       const urlBrezQuery = request.url.split("?")[0];

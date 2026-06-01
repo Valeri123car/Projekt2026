@@ -233,20 +233,28 @@ export default async function admin(app) {
         };
       }
 
-      const [logs, total] = await Promise.all([
-        app.prisma.lOG_voznja.findMany({
-          where,
-          include: {
-            uporabnik: {
-              select: { ime: true, priimek: true },
+      const pred24h = new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+      const [logs, total, totalVsi, steviloDanes, uniqueUsers] =
+        await Promise.all([
+          app.prisma.lOG_voznja.findMany({
+            where,
+            include: {
+              uporabnik: { select: { ime: true, priimek: true } },
             },
-          },
-          orderBy: { timestamp: "desc" },
-          skip: (page - 1) * limit,
-          take: limit,
-        }),
-        app.prisma.lOG_voznja.count({ where }),
-      ]);
+            orderBy: { timestamp: "desc" },
+            skip: (page - 1) * limit,
+            take: limit,
+          }),
+          app.prisma.lOG_voznja.count({ where }),
+          app.prisma.lOG_voznja.count(),
+          app.prisma.lOG_voznja.count({
+            where: { timestamp: { gte: pred24h } },
+          }),
+          app.prisma.lOG_voznja.groupBy({
+            by: ["voznja_fk_uporabnik"],
+          }),
+        ]);
 
       return {
         logs: logs.map((l) => ({
@@ -260,6 +268,9 @@ export default async function admin(app) {
           type: l.TYPE,
         })),
         total,
+        totalVsi,
+        steviloDanes,
+        steviloUporabnikov: uniqueUsers.length,
         page,
         totalPages: Math.ceil(total / limit),
       };
