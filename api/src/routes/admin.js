@@ -206,4 +206,63 @@ export default async function admin(app) {
       });
     },
   );
+
+  app.get(
+    "/audit",
+    {
+      onRequest: [app.authenticate, adminOnly],
+      schema: {
+        description: "Vrni audit log (samo admin)",
+        querystring: {
+          type: "object",
+          properties: {
+            page: { type: "integer", default: 1 },
+            limit: { type: "integer", default: 20 },
+            filter: { type: "string" },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const { page = 1, limit = 20, filter } = request.query;
+
+      const where = {};
+      if (filter === "last24h") {
+        where.timestamp = {
+          gte: new Date(Date.now() - 24 * 60 * 60 * 1000),
+        };
+      }
+
+      const [logs, total] = await Promise.all([
+        app.prisma.lOG_voznja.findMany({
+          where,
+          include: {
+            uporabnik: {
+              select: { ime: true, priimek: true },
+            },
+          },
+          orderBy: { timestamp: "desc" },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        app.prisma.lOG_voznja.count({ where }),
+      ]);
+
+      return {
+        logs: logs.map((l) => ({
+          id: l.idLOG,
+          timestamp: l.timestamp,
+          user: l.uporabnik
+            ? `${l.uporabnik.ime} ${l.uporabnik.priimek}`
+            : "Neznano",
+          metoda: l.metoda || l.TYPE?.split(" ")[0] || "-",
+          url: l.url || l.TYPE?.split(" ").slice(1).join(" ") || "-",
+          type: l.TYPE,
+        })),
+        total,
+        page,
+        totalPages: Math.ceil(total / limit),
+      };
+    },
+  );
 }

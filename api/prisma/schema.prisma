@@ -31,13 +31,14 @@ model Uporabnik {
   gdpr_soglasje   Boolean         @default(false)
   gdpr_datum      DateTime?
   tahograf_zapisi TahografZapis[]
+  logs            LOG_voznja[]
 
   @@index([fk_postavka])
 }
 
 model Voznja {
-  id_voznja       Int          @id @default(autoincrement())
-  datum           DateTime     @db.Date
+  id_voznja       Int       @id @default(autoincrement())
+  datum           DateTime  @db.Date
   zacetek         DateTime
   konc            DateTime
   trajanje        String?
@@ -46,11 +47,10 @@ model Voznja {
   posadka         String?
   fk_uporabnik    Int
   timestamp_zapis DateTime?
-  stranka         String?      @db.VarChar(100)
-  relacija        String?      @db.VarChar(255)
-  opis            String?      @db.VarChar(500)
-  uporabnik       Uporabnik    @relation(fields: [fk_uporabnik], references: [id_uporabnik])
-  logs            LOG_voznja[]
+  stranka         String?   @db.VarChar(100)
+  relacija        String?   @db.VarChar(255)
+  opis            String?   @db.VarChar(500)
+  uporabnik       Uporabnik @relation(fields: [fk_uporabnik], references: [id_uporabnik])
 
   @@index([fk_uporabnik])
 }
@@ -75,7 +75,6 @@ model Vozilo {
   @@index([fk_tip_vozila])
 }
 
-//TODO: dodaj polje za fizično oz pravo stranko, da bomo lahko ločili med fizičnimi in pravnimi strankami
 model Stranka {
   id_stranka Int     @id @default(autoincrement())
   naziv      String  @db.VarChar(45)
@@ -104,14 +103,17 @@ model Urnik {
 }
 
 model LOG_voznja {
-  idLOG               Int      @id @default(autoincrement())
+  idLOG               Int       @id @default(autoincrement())
   timestamp           DateTime
-  TYPE                String   @db.VarChar(45)
-  voznja_id_voznja    Int
+  TYPE                String    @db.VarChar(255)
+  metoda              String?   @db.VarChar(10)
+  url                 String?   @db.VarChar(255)
+  voznja_id_voznja    Int       @default(0)
   voznja_fk_uporabnik Int
-  voznja              Voznja   @relation(fields: [voznja_id_voznja], references: [id_voznja])
+  uporabnik           Uporabnik @relation(fields: [voznja_fk_uporabnik], references: [id_uporabnik])
 
-  @@index([voznja_id_voznja])
+  @@index([voznja_fk_uporabnik])
+  @@index([timestamp])
 }
 
 model Racun {
