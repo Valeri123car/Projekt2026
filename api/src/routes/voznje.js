@@ -1,4 +1,12 @@
 export default async function voznje(app) {
+  const protectedOnly = async (request, reply) => {
+    if (request.user.vloga !== 2) {
+      return reply
+        .code(403)
+        .send({ error: "Dostop zavrnjen" });
+    }
+  };
+
   app.get(
     "/",
     {
@@ -92,5 +100,67 @@ export default async function voznje(app) {
 
       return reply.code(204).send();
     },
+  );
+  app.get(
+    "/voznjeMesec",
+    {
+      onRequest: [app.authenticate, protectedOnly],
+      schema: {
+        description: "Vrni vse vožnje za izbrane voznike v danem obdobju",
+        querystring: {
+          type: "object",
+          required: ["od", "do"],
+          properties: {
+            od: { type: "string" },
+            do: { type: "string" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      let { fk_uporabnik, od, do: doDate } = request.query;
+
+      // Handle single or multiple user IDs
+      let voznikIds = [];
+      if (typeof fk_uporabnik === "string") {
+        voznikIds = [parseInt(fk_uporabnik)];
+      } else if (Array.isArray(fk_uporabnik)) {
+        voznikIds = fk_uporabnik.map((id) => parseInt(id));
+      }
+
+      if (voznikIds.length === 0) {
+        return reply
+          .code(400)
+          .send({ error: "Vsaj en voznik mora biti izbran" });
+      }
+
+      const fromDate = new Date(od);
+      const toDate = new Date(doDate);
+      toDate.setHours(23, 59, 59, 999);
+
+      const voznje = await app.prisma.voznja.findMany({
+        where: {
+          fk_uporabnik: { in: voznikIds },
+          zacetek: {
+            gte: fromDate,
+            lte: toDate,
+          },
+        },
+        include: {
+          uporabnik: {
+            select: {
+              ime: true,
+              priimek: true,
+            },
+          },
+        },
+        orderBy: { zacetek: "desc" },
+      });
+
+      return voznje.map((voznja) => ({
+        ...voznja,
+        voznik: `${voznja.uporabnik.ime} ${voznja.uporabnik.priimek}`,
+      }));
+    }
   );
 }

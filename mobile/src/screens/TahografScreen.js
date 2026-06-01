@@ -138,38 +138,64 @@ export default function TahografScreen() {
 
   const zamenjajStanje = async (novoStanje) => {
     if (aktivno?.stanje === novoStanje) return;
-    setMenjiLoading(true);
 
-    const zdaj = new Date().toISOString();
-    const noviZapis = {
-      stanje: novoStanje,
-      zacetek: zdaj,
-      konec: null,
-      id_zapis: null,
-      fk_uporabnik: aktivno?.fk_uporabnik,
+    const zahtevaTablica = novoStanje === "VOZNJA" || novoStanje === "DELO";
+
+    const izvediZamenjavo = async (registrska) => {
+      setMenjiLoading(true);
+      const zdaj = new Date().toISOString();
+      const noviZapis = {
+        stanje: novoStanje,
+        zacetek: zdaj,
+        konec: null,
+        id_zapis: null,
+        fk_uporabnik: aktivno?.fk_uporabnik,
+        registrska: registrska || null,
+      };
+      await shraniAktivnoLokalno(noviZapis);
+      setAktivno(noviZapis);
+      try {
+        const res = await api.post("/tahograf/zacni", {
+          stanje: novoStanje,
+          registrska: registrska || undefined,
+        });
+        console.log("ZACNI OK:", JSON.stringify(res.data));
+        await naloziPodatke();
+      } catch (err) {
+        console.log(
+          "ZACNI ERROR:",
+          err.response?.status,
+          JSON.stringify(err.response?.data),
+        );
+        await dodajCakajoci({
+          tip: "zacni",
+          stanje: novoStanje,
+          cas: zdaj,
+          registrska,
+        });
+        Alert.alert(
+          "Brez signala",
+          "Stanje je shranjeno lokalno. Ob vzpostavitvi povezave se sinhronizira.",
+          [{ text: "OK" }],
+        );
+      } finally {
+        setMenjiLoading(false);
+      }
     };
 
-    await shraniAktivnoLokalno(noviZapis);
-    setAktivno(noviZapis);
-
-    try {
-      const res = await api.post("/tahograf/zacni", { stanje: novoStanje });
-      console.log("ZACNI OK:", JSON.stringify(res.data));
-      await naloziPodatke();
-    } catch (err) {
-      console.log(
-        "ZACNI ERROR:",
-        err.response?.status,
-        JSON.stringify(err.response?.data),
+    if (zahtevaTablica) {
+      Alert.prompt(
+        "Registrska številka",
+        "Vnesite registrsko številko vozila (opcijsko):",
+        [
+          { text: "Preskoči", onPress: () => izvediZamenjavo(null) },
+          { text: "Potrdi", onPress: (vrednost) => izvediZamenjavo(vrednost) },
+        ],
+        "plain-text",
+        aktivno?.registrska || "",
       );
-      await dodajCakajoci({ tip: "zacni", stanje: novoStanje, cas: zdaj });
-      Alert.alert(
-        "Brez signala",
-        "Stanje je shranjeno lokalno. Ob vzpostavitvi povezave se sinhronizira.",
-        [{ text: "OK" }],
-      );
-    } finally {
-      setMenjiLoading(false);
+    } else {
+      await izvediZamenjavo(null);
     }
   };
 

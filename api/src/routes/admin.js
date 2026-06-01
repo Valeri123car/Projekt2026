@@ -11,9 +11,7 @@ export default async function admin(app) {
     "/vozniki",
     {
       onRequest: [app.authenticate, adminOnly],
-      schema: {
-        description: "Vrni vse voznike (samo admin)",
-      },
+      schema: { description: "Vrni vse voznike (samo admin)" },
     },
     async () => {
       return app.prisma.uporabnik.findMany({
@@ -66,54 +64,49 @@ export default async function admin(app) {
   );
 
   app.get(
-  "/voznje/:driverId",
-  {
-    onRequest: [app.authenticate, adminOnly],
-    schema: {
-      description: "Vrni vse vožnje specifičnega voznika (samo admin)",
-      params: {
-        type: "object",
-        properties: {
-          driverId: { type: "integer" },
+    "/voznje/:driverId",
+    {
+      onRequest: [app.authenticate, adminOnly],
+      schema: {
+        description: "Vrni vse vožnje specifičnega voznika (samo admin)",
+        params: {
+          type: "object",
+          properties: { driverId: { type: "integer" } },
+          required: ["driverId"],
         },
-        required: ["driverId"],
-      },
-      querystring: {
-        type: "object",
-        properties: {
-          od: { type: "string", format: "date" },
-          do: { type: "string", format: "date" },
+        querystring: {
+          type: "object",
+          properties: {
+            od: { type: "string", format: "date" },
+            do: { type: "string", format: "date" },
+          },
         },
       },
     },
-  },
-  async (request) => {
-    const { driverId } = request.params;
-    const { od, do: do_ } = request.query;
+    async (request) => {
+      const { driverId } = request.params;
+      const { od, do: do_ } = request.query;
 
-    const where = { fk_uporabnik: parseInt(driverId) };
-    
-    if (od || do_) {
-      where.datum = {};
-      if (od) where.datum.gte = new Date(od);
-      if (do_) where.datum.lte = new Date(do_);
-    }
+      const where = { fk_uporabnik: parseInt(driverId) };
+      if (od || do_) {
+        where.datum = {};
+        if (od) where.datum.gte = new Date(od);
+        if (do_) where.datum.lte = new Date(do_);
+      }
 
-    return app.prisma.voznja.findMany({
-      where,
-      include: { uporabnik: { select: { ime: true, priimek: true } } },
-      orderBy: { datum: "desc" },
-    });
-  },
-);
+      return app.prisma.voznja.findMany({
+        where,
+        include: { uporabnik: { select: { ime: true, priimek: true } } },
+        orderBy: { datum: "desc" },
+      });
+    },
+  );
 
   app.get(
     "/urnik",
     {
       onRequest: [app.authenticate, adminOnly],
-      schema: {
-        description: "Vrni celoten urnik vseh voznikov (samo admin)",
-      },
+      schema: { description: "Vrni celoten urnik vseh voznikov (samo admin)" },
     },
     async () => {
       return app.prisma.urnik.findMany({
@@ -123,6 +116,41 @@ export default async function admin(app) {
           vozilo: true,
         },
         orderBy: { datum: "asc" },
+      });
+    },
+  );
+
+  app.get(
+    "/tahograf",
+    {
+      onRequest: [app.authenticate, adminOnly],
+      schema: {
+        description: "Vrni vse tahografske zapise vseh voznikov (samo admin)",
+        querystring: {
+          type: "object",
+          properties: {
+            fk_uporabnik: { type: "integer" },
+            od: { type: "string", format: "date" },
+            do: { type: "string", format: "date" },
+          },
+        },
+      },
+    },
+    async (request) => {
+      const { fk_uporabnik, od, do: do_ } = request.query;
+
+      const where = {};
+      if (fk_uporabnik) where.fk_uporabnik = parseInt(fk_uporabnik);
+      if (od || do_) {
+        where.zacetek = {};
+        if (od) where.zacetek.gte = new Date(od);
+        if (do_) where.zacetek.lte = new Date(do_);
+      }
+
+      return app.prisma.tahografZapis.findMany({
+        where,
+        include: { uporabnik: { select: { ime: true, priimek: true } } },
+        orderBy: { zacetek: "desc" },
       });
     },
   );

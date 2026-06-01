@@ -11,9 +11,13 @@ export default async function dddUpload(app) {
       schema: {
         description: "Testni endpoint za nalaganje DDD datoteke",
       },
-    }, async (request, reply) => {
-      return { message: "Endpoint deluje, pošlji POST zahtevek z DDD datoteko na /upload" };
-    }
+    },
+    async (request, reply) => {
+      return {
+        message:
+          "Endpoint deluje, pošlji POST zahtevek z DDD datoteko na /upload",
+      };
+    },
   );
 
   app.post(
@@ -27,30 +31,28 @@ export default async function dddUpload(app) {
     },
     async (request, reply) => {
       try {
-
+        console.log("[UPLOAD] Prejem datoteke...");
         const data = await request.file();
 
         if (!data) {
           return reply.code(400).send({ error: "Datoteka ni bila naložena" });
         }
 
-
-        const isDDD = data.filename.endsWith(".ddd");
-        const isExcel = data.filename.endsWith(".xlsx") || data.filename.endsWith(".xls");
+        const filename = data.filename.toLowerCase();
+        const isDDD = filename.endsWith(".ddd");
+        const isExcel = filename.endsWith(".xlsx") || filename.endsWith(".xls");
 
         if (!isDDD && !isExcel) {
           return reply
             .code(400)
-            .send({ error: "Datoteka mora biti .ddd ali .xlsx formata" });
+            .send({ error: "Datoteka mora biti .DDD ali .xlsx formata" });
         }
 
-   
         const tempDir = os.tmpdir();
         const tempFilePath = path.join(
           tempDir,
-          `upload_${Date.now()}_${data.filename}`
+          `upload_${Date.now()}_${data.filename}`,
         );
-
 
         const buffer = await data.toBuffer();
         await fs.writeFile(tempFilePath, buffer);
@@ -72,13 +74,10 @@ export default async function dddUpload(app) {
         }
 
         // Get full path to Python script
-        const pythonPath = path.join(
-          process.cwd(),
-          "..",
-          "server",
-          "python",
-          pythonScript
-        );
+        const pythonPath = path.join(process.cwd(), "python", pythonScript);
+
+        console.log(`[UPLOAD] Python script path: ${pythonPath}`);
+        console.log(`[UPLOAD] Python args: ${pythonArgs.join(" ")}`);
 
         const parsedData = await new Promise((resolve, reject) => {
           let output = "";
@@ -97,20 +96,29 @@ export default async function dddUpload(app) {
           python.on("close", (code) => {
             // Clean up temp file
             fs.unlink(tempFilePath).catch((err) =>
-              console.error("[UPLOAD] Napaka pri brisanju temp datoteke:", err)
+              console.error("[UPLOAD] Napaka pri brisanju temp datoteke:", err),
             );
 
             if (code !== 0) {
+              console.error(`[UPLOAD] Python script failed with code ${code}`);
+              console.error(`[UPLOAD] stderr: ${errorOutput}`);
+              console.error(`[UPLOAD] stdout: ${output}`);
               reject(new Error(`${fileType} parser failed: ${errorOutput}`));
               return;
             }
 
             try {
-              const parsed = JSON.parse(output);
+              // Extract JSON from output (skip any debug messages before JSON)
+              const jsonStart = output.indexOf("{");
+              if (jsonStart === -1) {
+                throw new Error(`No JSON found in output: ${output}`);
+              }
+              const jsonString = output.substring(jsonStart);
+              const parsed = JSON.parse(jsonString);
               resolve(parsed);
             } catch (e) {
               reject(
-                new Error(`Failed to parse ${fileType} output: ${output}`)
+                new Error(`Failed to parse ${fileType} output: ${output}`),
               );
             }
           });
@@ -122,82 +130,101 @@ export default async function dddUpload(app) {
         });
 
         //find user in database
-        const voznikParts = parsedData.voznik.split(' ');
-        const ime = voznikParts[0];
-        const priimek = voznikParts.slice(1).join(' ');
+        const voznikParts = parsedData.voznik.split(" ");
+        const priimek = voznikParts[0];
+        const ime = voznikParts.slice(1).join(" ");
+        console.log(`[UPLOAD] Iskanje uporabnika: ${ime} ${priimek}`);
 
         const user = await app.prisma.uporabnik.findFirst({
           where: {
-            ime: { equals: ime, mode: 'insensitive' },
-            priimek: { equals: priimek, mode: 'insensitive' }
+            ime: { equals: ime, mode: "insensitive" },
+            priimek: { equals: priimek, mode: "insensitive" },
           },
-          select: { id_uporabnik: true }
+          select: { id_uporabnik: true },
         });
 
         if (!user) {
           return reply.code(404).send({
             error: "Uporabnik ni najden",
-            details: `Uporabnik z imenom "${parsedData.voznik}" ne obstaja v bazi`
+            details: `Uporabnik z imenom "${parsedData.voznik}" ne obstaja v bazi`,
           });
         }
 
         const id_uporabnik = user.id_uporabnik;
-        console.log(`[UPLOAD] Uporabnik najden: ${parsedData.voznik} (ID: ${id_uporabnik})`);
+        console.log(
+          `[UPLOAD] Uporabnik najden: ${parsedData.voznik} (ID: ${id_uporabnik})`,
+        );
 
         const voznje = parsedData.records;
-        const results = {
-          success: [],
-          failed: []
-        };
 
-        for (let i = 0; i < voznje.length; i++) {
-          const voznja = voznje[i];
-          try {
-            await app.prisma.voznja.create({
-              data: {
-                datum: new Date(),
-                zacetek: new Date(voznja.zacetek),
-                konec: new Date(voznja.konec),
-                trajanje: voznja.trajanje,
-                fk_uporabnik: id_uporabnik
-                //TODO dodaj se potem aktivnost, registerska in posadko ko posodobis v bazi
-              }   
-            });
-            results.success.push(i + 1);
-          } catch (error) {
-            console.error(`[UPLOAD] Napaka pri shranjevanju voznje ${i + 1}:`, error.message);
-            results.failed.push({
-              index: i + 1,
-              voznja: voznja,
-              error: error.message
-            });
-          }
+        try {
+          // Use transaction: all-or-nothing
+          await app.prisma.$transaction(
+            voznje.map((voznja) =>
+              app.prisma.tahografZapis.create({
+                data: {
+                  fk_uporabnik: id_uporabnik,
+                  stanje: (voznja.aktivnost || "DRUGO")
+                    .toUpperCase()
+                    .replace("VOŽNJA", "VOZNJA")
+                    .replace("POČITEK", "POCITEK")
+                    .replace("RAZPOLOŽLJIVOST", "RAZPOLOZLJIVOST"),
+                  zacetek: new Date(voznja.zacetek),
+                  konec: new Date(voznja.konec),
+                  trajanje_min: (() => {
+                    const t = voznja.dolzina || voznja.trajanje;
+                    if (!t) return null;
+                    if (typeof t === "number") return t;
+                    if (typeof t === "string" && t.includes(":")) {
+                      const [h, m] = t.split(":").map(Number);
+                      return h * 60 + m;
+                    }
+                    return null;
+                  })(),
+                  registrska: voznja.registerska || null,
+                  posadka:
+                    voznja.posadka === "Da" || voznja.posadka === true || false,
+                  vir: "UVOZ",
+                },
+              }),
+            ),
+          );
+
+          console.log(
+            `[UPLOAD] Shranjenih vozanj: ${voznje.length}/${voznje.length}`,
+          );
+
+          return reply.code(201).send({
+            success: true,
+            message: `${fileType} datoteka uspešno parsirana`,
+            fileType: fileType,
+            summary: {
+              total: voznje.length,
+              saved: voznje.length,
+              failed: 0,
+            },
+            failures: null,
+            data: parsedData,
+          });
+        } catch (error) {
+          console.error(
+            `[UPLOAD] Napaka pri shranjevanju vozanj (transakacija rollback):`,
+            error.message,
+          );
+          return reply.code(400).send({
+            error:
+              "Napaka pri shranjevanju vozanj - nobena voznja ni bila shranjena",
+            details: error.message,
+          });
         }
-
-        console.log(`[UPLOAD] Shranjenih vozanj: ${results.success.length}/${voznje.length}`);
-        if (results.failed.length > 0) {
-          console.log(`[UPLOAD] Napake pri ${results.failed.length} voznjah`);
-        }
-
-        return reply.code(201).send({
-          success: true,
-          message: `${fileType} datoteka uspešno parsirana`,
-          fileType: fileType,
-          summary: {
-            total: voznje.length,
-            saved: results.success.length,
-            failed: results.failed.length
-          },
-          failures: results.failed.length > 0 ? results.failed : null,
-          data: parsedData,
-        });
       } catch (error) {
         console.error("[ERROR] Napaka pri nalaganju datoteke:", error.message);
+        console.error("[ERROR] Stack:", error.stack);
         return reply.code(500).send({
           error: "Napaka pri procesiranju datoteke",
           details: error.message,
         });
       }
-    }
+    },
   );
 }
