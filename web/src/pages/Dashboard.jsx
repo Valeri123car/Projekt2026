@@ -190,11 +190,10 @@ export default function Dashboard() {
   const today = new Date().toISOString().split('T')[0];
 
   const [statistics, setStatistics] = useState({
-    totalHours: 1284,
-    totalKm: 42850,
-    totalRevenue: 158420,
-    activeDrivers: 18,
-    totalDrivers: 22,
+    totalHours: 0,
+    totalKm: 0,
+    activeDrivers: 0,
+    totalDrivers: 0,
   });
   const [rides, setRides] = useState([]);
   const [alerts, setAlerts] = useState([]);
@@ -211,14 +210,20 @@ export default function Dashboard() {
       setDashLoading(true);
       try {
         const [statsRes, ridesRes, alertsRes] = await Promise.all([
-          api.get('/admin/dashboard/statistics'),
-          api.get('/admin/dashboard/recent-rides'),
-          api.get('/admin/dashboard/alerts'),
+          api.get('/dashboard/statistics'),
+          api.get('/dashboard/recent-rides'),
+          api.get('/dashboard/alerts'),
         ]);
         setStatistics(statsRes.data);
         setRides(ridesRes.data);
         setAlerts(alertsRes.data);
       } catch {
+        setStatistics({
+          totalHours: 0,
+          totalKm: 0,
+          activeDrivers: 0,
+          totalDrivers: 0,
+        });
         setRides(PLACEHOLDER_RIDES);
         setAlerts(PLACEHOLDER_ALERTS);
       } finally {
@@ -267,19 +272,6 @@ export default function Dashboard() {
               <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Sirena Admin</h1>
               <p className="text-gray-500 text-sm mt-1">Nadzorna plošča – Pregled sistema</p>
             </div>
-            <div className="flex gap-2 sm:gap-4 items-center flex-wrap">
-              <input
-                type="text"
-                placeholder="Iskanje voznikov..."
-                className="px-3 sm:px-4 py-2 border border-gray-300 rounded-lg text-sm w-full sm:w-auto"
-              />
-              <button className="p-2 hover:bg-gray-200 rounded-lg hidden sm:block">
-                <span className="material-symbols-outlined">notifications</span>
-              </button>
-              <button className="p-2 hover:bg-gray-200 rounded-lg hidden sm:block">
-                <span className="material-symbols-outlined">help</span>
-              </button>
-            </div>
           </div>
 
           {/* Tabs */}
@@ -306,11 +298,10 @@ export default function Dashboard() {
 
         {activeTab === 'dashboard' && (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-8">
               <StatCard label="Skupne ure"      value={statistics.totalHours.toLocaleString()} unit="h"  iconName="schedule"      bgColor="bg-blue-100"   iconColor="text-blue-600"   trend="↑ 12%" />
               <StatCard label="Skupni kilometri" value={statistics.totalKm.toLocaleString()}   unit="km" iconName="route"         bgColor="bg-orange-100" iconColor="text-orange-600" trend="↑ 5.6%" />
-              <StatCard label="Skupni prihodi"   value={`€${(statistics.totalRevenue/1000).toFixed(0)}k`} extra={`€${statistics.totalRevenue.toLocaleString()}`} iconName="attach_money" bgColor="bg-red-100" iconColor="text-red-600" trend="↑ 1%" />
-              <StatCard label="Aktivni vozniki"  value={`${statistics.activeDrivers}/${statistics.totalDrivers}`} unit="voznikov" iconName="group" bgColor="bg-green-100" iconColor="text-green-600" trend="Aktivno" />
+              <StatCard label="Vozniki v bazi"   value={statistics.totalDrivers.toLocaleString()} unit="voznikov" iconName="group" bgColor="bg-green-100" iconColor="text-green-600" trend={`${statistics.activeDrivers} aktivnih`} />
             </div>
 
             <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-8 shadow-sm">
