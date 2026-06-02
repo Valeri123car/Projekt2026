@@ -148,7 +148,7 @@ export default async function voznje(app) {
       const voznjeMesec = await app.prisma.voznja.findMany({
         where: {
           fk_uporabnik: { in: voznikIds },
-          zacetek: {
+          datum: {
             gte: monthFromDate,
             lte: monthToDate,
           },
@@ -170,7 +170,7 @@ export default async function voznje(app) {
       const voznje4mesece = await app.prisma.voznja.findMany({
         where: {
           fk_uporabnik: { in: voznikIds },
-          zacetek: {
+          datum: {
             gte: fourMonthsAgo,
             lte: monthToDate,
           },
