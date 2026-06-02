@@ -140,9 +140,9 @@ export default async function voznje(app) {
 
       console.log("Fetching voznjeMesec with params:", { voznikIds, od, doDate, monthFromDate, monthToDate });
 
-      // Calculate date 4 months ago
-      const fourMonthsAgo = new Date(monthToDate);
-      fourMonthsAgo.setMonth(fourMonthsAgo.getMonth() - 4);
+      // Calculate date 4 weeks (28 days) ago
+      const fourWeeksAgo = new Date(monthToDate);
+      fourWeeksAgo.setDate(fourWeeksAgo.getDate() - 28);
 
       // Fetch data for selected month from TahografZapis
       const voznjeMesec = await app.prisma.tahografZapis.findMany({
@@ -166,12 +166,12 @@ export default async function voznje(app) {
 
       console.log("voznjeMesec found:", voznjeMesec.length, "entries");
 
-      // Fetch data for last 4 months from TahografZapis
+      // Fetch data for last 4 weeks from TahografZapis
       const voznje4mesece = await app.prisma.tahografZapis.findMany({
         where: {
           fk_uporabnik: { in: voznikIds },
           zacetek: {
-            gte: fourMonthsAgo,
+            gte: fourWeeksAgo,
             lte: monthToDate,
           },
         },
@@ -191,8 +191,21 @@ export default async function voznje(app) {
         return minutes / 60;
       };
 
-      // Calculate 4-month totals per voznik (only Vožnja and Delo)
+      // Calculate totals per voznik for current month and last 4 months
+      const monthTotals = {};
       const fourMonthsTotals = {};
+
+      // Sum current month
+      voznjeMesec.forEach((zapis) => {
+        if (zapis.stanje === "Vožnja" || zapis.stanje === "Delo") {
+          if (!monthTotals[zapis.fk_uporabnik]) {
+            monthTotals[zapis.fk_uporabnik] = 0;
+          }
+          monthTotals[zapis.fk_uporabnik] += parseMinutesToHours(zapis.trajanje_min);
+        }
+      });
+
+      // Sum last 4 months
       voznje4mesece.forEach((zapis) => {
         if (zapis.stanje === "Vožnja" || zapis.stanje === "Delo") {
           if (!fourMonthsTotals[zapis.fk_uporabnik]) {
@@ -201,6 +214,9 @@ export default async function voznje(app) {
           fourMonthsTotals[zapis.fk_uporabnik] += parseMinutesToHours(zapis.trajanje_min);
         }
       });
+
+      console.log("Month totals:", monthTotals);
+      console.log("4-month totals:", fourMonthsTotals);
 
       // Group by voznik for the selected month
       const result = {};
@@ -230,11 +246,15 @@ export default async function voznje(app) {
       });
 
       // Format and return results
-      return Object.values(result).map((entry) => ({
-        voznik: entry.voznik,
-        zadnje4mesece: Math.round((fourMonthsTotals[entry.fk_uporabnik] || 0) * 100) / 100,
-        taMesec: entry.taMesec,
-      }));
+      return Object.values(result).map((entry) => {
+        // Use 4-month total, but at least use current month's total
+        const total = fourMonthsTotals[entry.fk_uporabnik] || monthTotals[entry.fk_uporabnik] || 0;
+        return {
+          voznik: entry.voznik,
+          zadnje4mesece: Math.round(total * 100) / 100,
+          taMesec: entry.taMesec,
+        };
+      });
     }
   );
 }
