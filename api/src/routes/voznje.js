@@ -138,6 +138,8 @@ export default async function voznje(app) {
       const monthToDate = new Date(doDate);
       monthToDate.setHours(23, 59, 59, 999);
 
+      console.log("Fetching voznjeMesec with params:", { voznikIds, od, doDate, monthFromDate, monthToDate });
+
       // Calculate date 4 months ago
       const fourMonthsAgo = new Date(monthToDate);
       fourMonthsAgo.setMonth(fourMonthsAgo.getMonth() - 4);
@@ -161,6 +163,8 @@ export default async function voznje(app) {
         },
         orderBy: { zacetek: "asc" },
       });
+
+      console.log("voznjeMesec found:", voznjeMesec.length, "entries");
 
       // Fetch data for last 4 months
       const voznje4mesece = await app.prisma.voznja.findMany({

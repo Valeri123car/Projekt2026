@@ -8,6 +8,7 @@ export default function Voznje() {
 
   const [voznje, setVoznje] = useState([]);
   const [filteredVoznje, setFilteredVoznje] = useState([]);
+  const [allVozniki, setAllVozniki] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
@@ -28,7 +29,10 @@ export default function Voznje() {
     new Set(voznje.map((v) => JSON.stringify({ id: v.fk_uporabnik, ime: v.uporabnik?.ime, priimek: v.uporabnik?.priimek })))
   ).map((v) => JSON.parse(v)).sort((a, b) => (a.ime + a.priimek).localeCompare(b.ime + b.priimek));
 
-  useEffect(() => { fetchVoznje(); }, []);
+  useEffect(() => { 
+    fetchVoznje();
+    fetchAllVozniki();
+  }, []);
   useEffect(() => { applyFiltersAndSort(); }, [voznje, filterDateFrom, filterDateTo, filterVoznik, sortBy]);
 
   const fetchVoznje = async () => {
@@ -41,6 +45,20 @@ export default function Voznje() {
       setError(err.response?.data?.error || "Napaka pri nalaganju vožnj");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchAllVozniki = async () => {
+    try {
+      const response = await api.get("/admin/vozniki");
+      const vozniki = response.data.map((v) => ({
+        id: v.id_uporabnik,
+        ime: v.ime,
+        priimek: v.priimek,
+      })).sort((a, b) => (a.ime + a.priimek).localeCompare(b.ime + b.priimek));
+      setAllVozniki(vozniki);
+    } catch (err) {
+      console.error("Error fetching vozniki:", err);
     }
   };
 
@@ -195,7 +213,7 @@ export default function Voznje() {
                     onChange={(e) => setSelectedExportVozniki(Array.from(e.target.selectedOptions, (o) => parseInt(o.value)))}
                     className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" size={1}>
                     <option value="">Izberi voznika...</option>
-                    {uniqueVozniki.map((v) => <option key={v.id} value={v.id}>{v.ime} {v.priimek}</option>)}
+                    {allVozniki.map((v) => <option key={v.id} value={v.id}>{v.ime} {v.priimek}</option>)}
                   </select>
                   <input type="month" value={selectedExportMonth} onChange={(e) => setSelectedExportMonth(e.target.value)}
                     className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
