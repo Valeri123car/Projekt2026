@@ -144,11 +144,11 @@ export default async function voznje(app) {
       const fourMonthsAgo = new Date(monthToDate);
       fourMonthsAgo.setMonth(fourMonthsAgo.getMonth() - 4);
 
-      // Fetch data for selected month
-      const voznjeMesec = await app.prisma.voznja.findMany({
+      // Fetch data for selected month from TahografZapis
+      const voznjeMesec = await app.prisma.tahografZapis.findMany({
         where: {
           fk_uporabnik: { in: voznikIds },
-          datum: {
+          zacetek: {
             gte: monthFromDate,
             lte: monthToDate,
           },
@@ -166,11 +166,11 @@ export default async function voznje(app) {
 
       console.log("voznjeMesec found:", voznjeMesec.length, "entries");
 
-      // Fetch data for last 4 months
-      const voznje4mesece = await app.prisma.voznja.findMany({
+      // Fetch data for last 4 months from TahografZapis
+      const voznje4mesece = await app.prisma.tahografZapis.findMany({
         where: {
           fk_uporabnik: { in: voznikIds },
-          datum: {
+          zacetek: {
             gte: fourMonthsAgo,
             lte: monthToDate,
           },
@@ -185,51 +185,47 @@ export default async function voznje(app) {
         },
       });
 
-      // Helper function to parse duration to hours
-      const parseTrajanjeToHours = (trajanje) => {
-        if (!trajanje) return 0;
-        if (trajanje.includes(":")) {
-          const [hours, minutes] = trajanje.split(":").map(Number);
-          return hours + minutes / 60;
-        }
-        return parseFloat(trajanje);
+      // Helper function to convert minutes to hours
+      const parseMinutesToHours = (minutes) => {
+        if (!minutes) return 0;
+        return minutes / 60;
       };
 
       // Calculate 4-month totals per voznik (only Vožnja and Delo)
       const fourMonthsTotals = {};
-      voznje4mesece.forEach((voznja) => {
-        if (voznja.aktivnost === "Vožnja" || voznja.aktivnost === "Delo") {
-          if (!fourMonthsTotals[voznja.fk_uporabnik]) {
-            fourMonthsTotals[voznja.fk_uporabnik] = 0;
+      voznje4mesece.forEach((zapis) => {
+        if (zapis.stanje === "Vožnja" || zapis.stanje === "Delo") {
+          if (!fourMonthsTotals[zapis.fk_uporabnik]) {
+            fourMonthsTotals[zapis.fk_uporabnik] = 0;
           }
-          fourMonthsTotals[voznja.fk_uporabnik] += parseTrajanjeToHours(voznja.trajanje);
+          fourMonthsTotals[zapis.fk_uporabnik] += parseMinutesToHours(zapis.trajanje_min);
         }
       });
 
       // Group by voznik for the selected month
       const result = {};
 
-      voznjeMesec.forEach((voznja) => {
-        const voznikName = `${voznja.uporabnik.ime} ${voznja.uporabnik.priimek}`;
+      voznjeMesec.forEach((zapis) => {
+        const voznikName = `${zapis.uporabnik.ime} ${zapis.uporabnik.priimek}`;
 
         if (!result[voznikName]) {
           result[voznikName] = {
             voznik: voznikName,
-            fk_uporabnik: voznja.fk_uporabnik,
+            fk_uporabnik: zapis.fk_uporabnik,
             taMesec: [],
           };
         }
 
         // Add each entry to taMesec array
-        const hoursStr = Math.floor(parseTrajanjeToHours(voznja.trajanje));
-        const minutesStr = String(Math.round((parseTrajanjeToHours(voznja.trajanje) % 1) * 60)).padStart(2, "0");
+        const hours = Math.floor(parseMinutesToHours(zapis.trajanje_min));
+        const minutes = (zapis.trajanje_min || 0) % 60;
 
         result[voznikName].taMesec.push({
-          zacetek: voznja.zacetek,
-          konc: voznja.konc,
-          trajanje: `${hoursStr}:${minutesStr}`,
-          aktivnost: voznja.aktivnost,
-          posadka: voznja.posadka,
+          zacetek: zapis.zacetek,
+          konc: zapis.konec,
+          trajanje: `${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}`,
+          aktivnost: zapis.stanje,
+          posadka: zapis.posadka ? "Da" : "Ne",
         });
       });
 
