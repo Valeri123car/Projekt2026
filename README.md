@@ -1003,7 +1003,7 @@ Ker projekt nima implementiranih avtomatiziranih testov, so tukaj predlogi za pr
 - Uvoz DDD datoteke → preveriti uvožene zapise
 ---
  
-## 12. Roadmap in znane omejitve
+## 12. Znane omejitve
  
 ### Znane omejitve
  
@@ -1013,19 +1013,4 @@ Ker projekt nima implementiranih avtomatiziranih testov, so tukaj predlogi za pr
 - **Refresh token brez rotacije** — trenutni implementacija ne rotira refresh tokenov ob vsaki uporabi, kar zmanjšuje varnost pri kraji tokena.
 - **Ni offline podpore za mobilno** — mobilna aplikacija zahteva aktivno internetno povezavo. Tahografski zapisi se ne shranjujejo lokalno ob izpadu povezave.
 - **EMŠO šifrirni ključ v env** — ključ za AES-256-GCM je shranjen v okoljski spremenljivki, ne v namenski key management rešitvi (npr. HashiCorp Vault, AWS KMS).
-### Roadmap
- 
-**Kratkoročno:**
-- Implementacija unit in integration testov (Jest)
-- Refresh token rotacija za višjo varnost
-- Offline modo za mobilno aplikacijo (lokalni SQLite cache s sinhronizacijo)
-**Srednjeročno:**
-- Python mikroservis za DDD/Excel parsing (FastAPI) namesto subprocess
-- Real-time dashboard posodabljanje prek WebSocket
-- Push notifikacije za voznike ob novem urniku (FCM/APNs)
-- Večjezičnost (i18n) za slovenščino in angleščino
-**Dolgoročno:**
-- Zamenjava Excel/DDD parserjev z validiranim EU tahografskim modulom
-- Integracija z zunanjimi fleet management sistemi
-- Mobile biometric authentication (Face ID / Touch ID prek expo-local-authentication)
-- Napredna analitika voženj in izvedbene statistike
+
