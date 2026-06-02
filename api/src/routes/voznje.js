@@ -106,7 +106,7 @@ export default async function voznje(app) {
     {
       onRequest: [app.authenticate, protectedOnly],
       schema: {
-        description: "Vrni vse vožnje za izbrane voznike v danem obdobju",
+        description: "Vrni mesečno poročilo za izbrane voznike",
         querystring: {
           type: "object",
           required: ["od", "do"],
@@ -134,16 +134,21 @@ export default async function voznje(app) {
           .send({ error: "Vsaj en voznik mora biti izbran" });
       }
 
-      const fromDate = new Date(od);
-      const toDate = new Date(doDate);
-      toDate.setHours(23, 59, 59, 999);
+      const monthFromDate = new Date(od);
+      const monthToDate = new Date(doDate);
+      monthToDate.setHours(23, 59, 59, 999);
 
-      const voznje = await app.prisma.voznja.findMany({
+      // Calculate date 4 months ago
+      const fourMonthsAgo = new Date(monthToDate);
+      fourMonthsAgo.setMonth(fourMonthsAgo.getMonth() - 4);
+
+      // Fetch data for selected month
+      const voznjeMesec = await app.prisma.voznja.findMany({
         where: {
           fk_uporabnik: { in: voznikIds },
           zacetek: {
-            gte: fromDate,
-            lte: toDate,
+            gte: monthFromDate,
+            lte: monthToDate,
           },
         },
         include: {
@@ -154,12 +159,81 @@ export default async function voznje(app) {
             },
           },
         },
-        orderBy: { zacetek: "desc" },
+        orderBy: { zacetek: "asc" },
       });
 
-      return voznje.map((voznja) => ({
-        ...voznja,
-        voznik: `${voznja.uporabnik.ime} ${voznja.uporabnik.priimek}`,
+      // Fetch data for last 4 months
+      const voznje4mesece = await app.prisma.voznja.findMany({
+        where: {
+          fk_uporabnik: { in: voznikIds },
+          zacetek: {
+            gte: fourMonthsAgo,
+            lte: monthToDate,
+          },
+        },
+        include: {
+          uporabnik: {
+            select: {
+              ime: true,
+              priimek: true,
+            },
+          },
+        },
+      });
+
+      // Helper function to parse duration to hours
+      const parseTrajanjeToHours = (trajanje) => {
+        if (!trajanje) return 0;
+        if (trajanje.includes(":")) {
+          const [hours, minutes] = trajanje.split(":").map(Number);
+          return hours + minutes / 60;
+        }
+        return parseFloat(trajanje);
+      };
+
+      // Calculate 4-month totals per voznik (only Vožnja and Delo)
+      const fourMonthsTotals = {};
+      voznje4mesece.forEach((voznja) => {
+        if (voznja.aktivnost === "Vožnja" || voznja.aktivnost === "Delo") {
+          if (!fourMonthsTotals[voznja.fk_uporabnik]) {
+            fourMonthsTotals[voznja.fk_uporabnik] = 0;
+          }
+          fourMonthsTotals[voznja.fk_uporabnik] += parseTrajanjeToHours(voznja.trajanje);
+        }
+      });
+
+      // Group by voznik for the selected month
+      const result = {};
+
+      voznjeMesec.forEach((voznja) => {
+        const voznikName = `${voznja.uporabnik.ime} ${voznja.uporabnik.priimek}`;
+
+        if (!result[voznikName]) {
+          result[voznikName] = {
+            voznik: voznikName,
+            fk_uporabnik: voznja.fk_uporabnik,
+            taMesec: [],
+          };
+        }
+
+        // Add each entry to taMesec array
+        const hoursStr = Math.floor(parseTrajanjeToHours(voznja.trajanje));
+        const minutesStr = String(Math.round((parseTrajanjeToHours(voznja.trajanje) % 1) * 60)).padStart(2, "0");
+
+        result[voznikName].taMesec.push({
+          zacetek: voznja.zacetek,
+          konc: voznja.konc,
+          trajanje: `${hoursStr}:${minutesStr}`,
+          aktivnost: voznja.aktivnost,
+          posadka: voznja.posadka,
+        });
+      });
+
+      // Format and return results
+      return Object.values(result).map((entry) => ({
+        voznik: entry.voznik,
+        zadnje4mesece: Math.round((fourMonthsTotals[entry.fk_uporabnik] || 0) * 100) / 100,
+        taMesec: entry.taMesec,
       }));
     }
   );

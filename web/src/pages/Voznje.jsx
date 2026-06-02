@@ -48,14 +48,18 @@ export default function Voznje() {
     if (selectedExportVozniki.length === 0) { alert("Izberi vsaj enega voznika"); return; }
     try {
       const [year, month] = selectedExportMonth.split("-").map(Number);
-      const firstDay = new Date(year, month - 1, 1).toISOString().split("T")[0];
-      const lastDay = new Date(year, month, 0).toISOString().split("T")[0];
+      const monthStr = String(month).padStart(2, "0");
+      const firstDay = `${year}-${monthStr}-01`;
+      const lastDayNum = new Date(year, month, 0).getDate();
+      const lastDay = `${year}-${monthStr}-${String(lastDayNum).padStart(2, "0")}`;
       const params = new URLSearchParams();
       selectedExportVozniki.forEach((id) => params.append("fk_uporabnik", id));
       params.append("od", firstDay);
       params.append("do", lastDay);
-      await api.get(`/voznje/voznjeMesec?${params.toString()}`);
-    } catch {
+      const response = await api.get(`/voznje/voznjeMesec?${params.toString()}`);
+      console.log("Monthly report:", response.data);
+    } catch (err) {
+      console.error("Error:", err);
       alert("Napaka pri izvozu mesečnega poročila");
     }
   };
