@@ -3,6 +3,8 @@ import fp from "fastify-plugin";
 async function auditPlugin(app) {
   app.addHook("onResponse", async (request, reply) => {
     if (!request.user) return;
+    if (!["POST", "PUT", "DELETE", "PATCH"].includes(request.method)) return;
+    if (reply.statusCode >= 400) return;
 
     const obcutljiviEndpointi = [
       "/api/v1/voznje",
@@ -10,6 +12,10 @@ async function auditPlugin(app) {
       "/api/v1/racuni",
       "/api/v1/log",
       "/api/v1/dashboard",
+      "/api/v1/stranke",
+      "/api/v1/vozila",
+      "/api/v1/urnik",
+      "/api/v1/tahograf",
     ];
 
     const jeObcutljiv = obcutljiviEndpointi.some((e) =>
@@ -17,13 +23,14 @@ async function auditPlugin(app) {
     );
     if (!jeObcutljiv) return;
 
-    if (reply.statusCode >= 400) return;
-
     try {
+      const urlBrezQuery = request.url.split("?")[0];
       await app.prisma.lOG_voznja.create({
         data: {
           timestamp: new Date(),
-          TYPE: `${request.method} ${request.url} - vloga:${request.user.vloga}`,
+          TYPE: `${request.method} ${urlBrezQuery}`,
+          metoda: request.method,
+          url: urlBrezQuery,
           voznja_id_voznja: 0,
           voznja_fk_uporabnik: request.user.id,
         },
