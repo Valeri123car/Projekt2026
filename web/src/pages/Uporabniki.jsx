@@ -5,9 +5,9 @@ import api from '../api/client';
 const ITEMS_PER_PAGE = 8;
 
 const DOSTOP_OPTIONS = [
-  { value: 1, label: 'VOZNIK', color: 'bg-emerald-100 text-emerald-700' },
-  { value: 2, label: 'ADMIN', color: 'bg-amber-100 text-amber-800' },
-  { value: 3, label: 'STRANKA', color: 'bg-slate-100 text-slate-600' },
+  { value: 1, label: 'VOZNIK',  color: 'bg-emerald-100 text-emerald-700', icon: 'car_spark',             iconBg: 'bg-emerald-50 text-emerald-600' },
+  { value: 2, label: 'ADMIN',   color: 'bg-amber-100 text-amber-800',     icon: 'deployed_code_account', iconBg: 'bg-amber-50 text-amber-600' },
+  { value: 3, label: 'VODSTVO', color: 'bg-orange-100 text-orange-700',   icon: 'support_agent',         iconBg: 'bg-orange-50 text-orange-600' },
 ];
 
 const getDostopMeta = (dostop) =>
@@ -431,9 +431,7 @@ export default function Uporabniki() {
             <article key={s.value} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{s.label}</p>
               <div className="mt-3 flex items-center gap-3">
-                <span className={`inline-flex rounded-full px-2 py-1 text-xs font-semibold ${s.color}`}>
-                  {s.count}
-                </span>
+                <span className={`material-symbols-outlined rounded-lg p-2 ${s.iconBg}`}>{s.icon}</span>
                 <p className="text-2xl font-bold text-slate-900">{s.count}</p>
               </div>
             </article>

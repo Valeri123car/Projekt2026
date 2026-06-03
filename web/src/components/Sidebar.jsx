@@ -6,7 +6,8 @@ const navItems = [
   { path: '/voznje',  icon: 'directions_car', label: 'Vožnje' },
   { path: '/vozniki', icon: 'group',        label: 'Vozniki' },
   { path: '/racuni',  icon: 'receipt_long', label: 'Računi' },
-  { path: '/audit',   icon: 'history',      label: 'Dnevnik revizije' }
+  { path: '/audit',   icon: 'history',      label: 'Dnevnik revizije' },
+  { path: '/uporabniki',   icon: 'patient_list',      label: 'Uporabniki' }
 ]
 
 export default function Sidebar() {
