@@ -418,12 +418,14 @@ export default async function admin(app) {
       };
     },
   );
- // ── Stranke ──────────────────────────────────────────────────────────────────
- 
+ // ─── Add these routes inside your admin(app) function in admin.js ─────────────
+
+  // ── Stranke ──────────────────────────────────────────────────────────────────
+
   app.get("/stranke", { onRequest: [app.authenticate, adminOnly] }, async () => {
     return app.prisma.stranka.findMany({ orderBy: { naziv: "asc" } });
   });
- 
+
   app.post(
     "/stranke",
     {
@@ -454,21 +456,21 @@ export default async function admin(app) {
       return reply.code(201).send(nova);
     },
   );
- 
+
   // ── Vozila ────────────────────────────────────────────────────────────────────
- 
+
   app.get("/vozila", { onRequest: [app.authenticate, adminOnly] }, async () => {
     return app.prisma.vozilo.findMany({
       include: { tip_vozila: true },
       orderBy: { registerska: "asc" },
     });
   });
- 
+
   // ── Urnik – availability ──────────────────────────────────────────────────────
   // Returns which vozila/vozniki are already booked on a given calendar date.
   // We compare just the date part (ignore time) since one vehicle/driver = one
   // trip per day in this system.
- 
+
   app.get(
     "/urnik/zasedeno",
     {
@@ -486,33 +488,33 @@ export default async function admin(app) {
     },
     async (request) => {
       const { datum, exclude_id } = request.query;
- 
-      // Cast both sides to DATE so time component is ignored.
-      // This works regardless of whether datum was stored as a plain date
-      // or as a full timestamp with time embedded.
-      const excludeClause = exclude_id
-        ? `AND id_urnik != ${parseInt(exclude_id)}`
-        : '';
- 
-      const zasedeni = await app.prisma.$queryRawUnsafe(`
-        SELECT fk_vozilo, fk_uporabnik
-        FROM "Urnik"
-        WHERE datum::date = $1::date
-        ${excludeClause}
-      `, datum);
- 
-      // $queryRawUnsafe returns BigInt for integer columns — convert to Number
+
+      // Build a date range covering the full calendar day in UTC.
+      // Using gte/lte on a midnight-to-midnight window reliably matches
+      // both plain @db.Date values (stored as 00:00:00Z) and any timestamp
+      // that was stored with a time component on the same day.
+      const dayStart = new Date(`${datum}T00:00:00.000Z`);
+      const dayEnd   = new Date(`${datum}T23:59:59.999Z`);
+
+      const zasedeni = await app.prisma.urnik.findMany({
+        where: {
+          datum: { gte: dayStart, lte: dayEnd },
+          ...(exclude_id ? { id_urnik: { not: parseInt(exclude_id) } } : {}),
+        },
+        select: { fk_vozilo: true, fk_uporabnik: true },
+      });
+
       return {
-        vozila:  [...new Set(zasedeni.map((z) => Number(z.fk_vozilo)))],
-        vozniki: [...new Set(zasedeni.map((z) => Number(z.fk_uporabnik)))],
+        vozila:  [...new Set(zasedeni.map((z) => z.fk_vozilo))],
+        vozniki: [...new Set(zasedeni.map((z) => z.fk_uporabnik))],
       };
     },
   );
- 
+
   // ── Urnik – CRUD ──────────────────────────────────────────────────────────────
   // datum is sent as a full ISO string "YYYY-MM-DDTHH:MM:00" from the frontend
   // so the time (ura) is encoded inside it — no schema changes needed.
- 
+
   app.post(
     "/urnik",
     {
@@ -554,7 +556,7 @@ export default async function admin(app) {
       return reply.code(201).send(nov);
     },
   );
- 
+
   app.put(
     "/urnik/:id",
     {
@@ -579,7 +581,7 @@ export default async function admin(app) {
       const { id } = request.params;
       const obstaja = await app.prisma.urnik.findUnique({ where: { id_urnik: parseInt(id) } });
       if (!obstaja) return reply.code(404).send({ error: "Prevoz ne obstaja" });
- 
+
       const { datum, naziv, cena, placano, fk_vozilo, fk_uporabnik, fk_stranka } = request.body;
       const data = {};
       if (datum        !== undefined) data.datum        = new Date(datum);
@@ -589,7 +591,7 @@ export default async function admin(app) {
       if (fk_vozilo    !== undefined) data.fk_vozilo    = fk_vozilo;
       if (fk_uporabnik !== undefined) data.fk_uporabnik = fk_uporabnik;
       if (fk_stranka   !== undefined) data.fk_stranka   = fk_stranka;
- 
+
       return app.prisma.urnik.update({
         where: { id_urnik: parseInt(id) },
         data,
@@ -601,7 +603,7 @@ export default async function admin(app) {
       });
     },
   );
- 
+
   // PATCH – quick placano toggle from table row
   app.patch(
     "/urnik/:id/placano",
@@ -624,7 +626,7 @@ export default async function admin(app) {
       });
     },
   );
- 
+
   app.delete(
     "/urnik/:id",
     {

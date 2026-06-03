@@ -57,6 +57,7 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
   const [zasedenaVozila, setZasedenaVozila] = useState([]);
   const [zasedeniVozniki, setZasedeniVozniki] = useState([]);
   const [availabilityLoaded, setAvailabilityLoaded] = useState(false);
+  const [availabilityLoading, setAvailabilityLoading] = useState(false);
 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState(null);
@@ -84,17 +85,22 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
       setZasedenaVozila([]);
       setZasedeniVozniki([]);
       setAvailabilityLoaded(false);
+      setAvailabilityLoading(false);
       return;
     }
     const check = async () => {
       try {
+        setAvailabilityLoading(true);
         const excludeParam = isEdit ? `&exclude_id=${prevoz.id_urnik}` : '';
         const res = await api.get(`/admin/urnik/zasedeno?datum=${datum}${excludeParam}`);
         setZasedenaVozila(res.data?.vozila ?? []);
         setZasedeniVozniki(res.data?.vozniki ?? []);
         setAvailabilityLoaded(true);
-      } catch {
+      } catch (e) {
+        console.error('Availability check failed:', e);
         setAvailabilityLoaded(true);
+      } finally {
+        setAvailabilityLoading(false);
       }
     };
     check();
@@ -276,6 +282,11 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
               <div className="rounded-lg border border-dashed border-slate-300 px-4 py-3 text-center text-xs text-slate-400">
                 Najprej izberite datum
               </div>
+            ) : availabilityLoading ? (
+              <div className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                <span className="material-symbols-outlined animate-spin text-[18px] text-blue-500">sync</span>
+                Nalagam razpoložljivost…
+              </div>
             ) : (
               <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                 {vsiVozila.map((v) => {
@@ -328,6 +339,11 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
               <div className="rounded-lg border border-dashed border-slate-300 px-4 py-3 text-center text-xs text-slate-400">
                 Najprej izberite datum
               </div>
+            ) : availabilityLoading ? (
+              <div className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                <span className="material-symbols-outlined animate-spin text-[18px] text-blue-500">sync</span>
+                Nalagam razpoložljivost…
+              </div>
             ) : (
               <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
                 {vsiVozniki.map((v) => {
@@ -368,7 +384,7 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Dodatne informacije</p>
             <div className="space-y-3">
               <div>
-                <label className="mb-1 block text-xs font-medium text-slate-600">Naziv </label>
+                <label className="mb-1 block text-xs font-medium text-slate-600">Naziv / Relacija</label>
                 <input
                   value={naziv}
                   onChange={(e) => setNaziv(e.target.value)}
@@ -637,7 +653,7 @@ export default function Prevozi() {
         <section className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400">search</span>
-            <input type="text" placeholder="Iskanje po stranki, nazivu, vozniku, vozilu…" value={searchQuery}
+            <input type="text" placeholder="Iskanje po stranki, relaciji, vozniku, vozilu…" value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full rounded-lg border border-slate-300 bg-white py-2 pl-9 pr-4 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
@@ -675,7 +691,7 @@ export default function Prevozi() {
                     <th className="px-4 py-4 cursor-pointer hover:text-slate-900" onClick={() => handleSort('voznik')}>
                       <div className="flex items-center gap-1">Voznik <SortIcon field="voznik" /></div>
                     </th>
-                    <th className="px-4 py-4">Naziv</th>
+                    <th className="px-4 py-4">Relacija</th>
                     <th className="px-4 py-4 cursor-pointer hover:text-slate-900" onClick={() => handleSort('cena')}>
                       <div className="flex items-center gap-1">Cena <SortIcon field="cena" /></div>
                     </th>
