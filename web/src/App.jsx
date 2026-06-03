@@ -20,13 +20,13 @@ export default function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-          <Route path="/racuni" element={<ProtectedRoute><Racuni /></ProtectedRoute>} />
-          <Route path="/vozniki" element={<ProtectedRoute vlogaRequired={2}><Vozniki /></ProtectedRoute>} />
+          <Route path="/racuni" element={<ProtectedRoute vlogaRequired={[2, 3]}><Racuni /></ProtectedRoute>} />
+          <Route path="/vozniki" element={<ProtectedRoute vlogaRequired={[2, 3]}><Vozniki /></ProtectedRoute>} />
           <Route path="/uporabniki" element={<ProtectedRoute vlogaRequired={2}><Uporabniki /></ProtectedRoute>} />
-          <Route path="/voznje" element={<ProtectedRoute vlogaRequired={2}><Voznje /></ProtectedRoute>} />
+          <Route path="/voznje" element={<ProtectedRoute><Voznje /></ProtectedRoute>} />
           <Route path="/audit" element={<ProtectedRoute vlogaRequired={2}><AuditLog /></ProtectedRoute>} />
           <Route path="/vozila" element={<ProtectedRoute vlogaRequired={2}><Vozila /></ProtectedRoute>} />
-          <Route path="/prevozi" element={<ProtectedRoute vlogaRequired={2}><Prevozi /></ProtectedRoute>} />
+          <Route path="/prevozi" element={<ProtectedRoute vlogaRequired={[2, 3]}><Prevozi /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </BrowserRouter>

@@ -7,10 +7,19 @@ export default async function admin(app) {
     }
   };
 
+  // Allows both ADMIN (2) and VODSTVO (3)
+  const managementOk = async (request, reply) => {
+    if (request.user.vloga !== 2 && request.user.vloga !== 3) {
+      return reply
+        .code(403)
+        .send({ error: "Dostop zavrnjen" });
+    }
+  };
+
   app.get(
     "/vozniki",
     {
-      onRequest: [app.authenticate, adminOnly],
+      onRequest: [app.authenticate, managementOk],
       schema: { description: "Vrni vse voznike (samo admin)" },
     },
     async () => {
@@ -31,7 +40,7 @@ export default async function admin(app) {
   app.get(
     "/voznje",
     {
-      onRequest: [app.authenticate, adminOnly],
+      onRequest: [app.authenticate, managementOk],
       schema: {
         description: "Vrni vse vožnje vseh voznikov (samo admin)",
         querystring: {
@@ -105,7 +114,7 @@ export default async function admin(app) {
   app.get(
     "/urnik",
     {
-      onRequest: [app.authenticate, adminOnly],
+      onRequest: [app.authenticate, managementOk],
       schema: { description: "Vrni celoten urnik vseh voznikov (samo admin)" },
     },
     async () => {
@@ -123,7 +132,7 @@ export default async function admin(app) {
   app.get(
     "/tahograf",
     {
-      onRequest: [app.authenticate, adminOnly],
+      onRequest: [app.authenticate, managementOk],
       schema: {
         description: "Vrni vse tahografske zapise vseh voznikov (samo admin)",
         querystring: {
@@ -422,14 +431,14 @@ export default async function admin(app) {
 
   // ── Stranke ──────────────────────────────────────────────────────────────────
 
-  app.get("/stranke", { onRequest: [app.authenticate, adminOnly] }, async () => {
+  app.get("/stranke", { onRequest: [app.authenticate, managementOk] }, async () => {
     return app.prisma.stranka.findMany({ orderBy: { naziv: "asc" } });
   });
 
   app.post(
     "/stranke",
     {
-      onRequest: [app.authenticate, adminOnly],
+      onRequest: [app.authenticate, managementOk],
       schema: {
         body: {
           type: "object",
@@ -459,7 +468,7 @@ export default async function admin(app) {
 
   // ── Vozila ────────────────────────────────────────────────────────────────────
 
-  app.get("/vozila", { onRequest: [app.authenticate, adminOnly] }, async () => {
+  app.get("/vozila", { onRequest: [app.authenticate, managementOk] }, async () => {
     return app.prisma.vozilo.findMany({
       include: { tip_vozila: true },
       orderBy: { registerska: "asc" },
@@ -474,7 +483,7 @@ export default async function admin(app) {
   app.get(
     "/urnik/zasedeno",
     {
-      onRequest: [app.authenticate, adminOnly],
+      onRequest: [app.authenticate, managementOk],
       schema: {
         querystring: {
           type: "object",
@@ -518,7 +527,7 @@ export default async function admin(app) {
   app.post(
     "/urnik",
     {
-      onRequest: [app.authenticate, adminOnly],
+      onRequest: [app.authenticate, managementOk],
       schema: {
         body: {
           type: "object",
@@ -560,7 +569,7 @@ export default async function admin(app) {
   app.put(
     "/urnik/:id",
     {
-      onRequest: [app.authenticate, adminOnly],
+      onRequest: [app.authenticate, managementOk],
       schema: {
         params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
         body: {
@@ -608,7 +617,7 @@ export default async function admin(app) {
   app.patch(
     "/urnik/:id/placano",
     {
-      onRequest: [app.authenticate, adminOnly],
+      onRequest: [app.authenticate, managementOk],
       schema: {
         params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
         body: { type: "object", required: ["placano"], properties: { placano: { type: "boolean" } } },
@@ -630,7 +639,7 @@ export default async function admin(app) {
   app.delete(
     "/urnik/:id",
     {
-      onRequest: [app.authenticate, adminOnly],
+      onRequest: [app.authenticate, managementOk],
       schema: {
         params: { type: "object", properties: { id: { type: "integer" } }, required: ["id"] },
       },
