@@ -2,16 +2,19 @@ import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
 const navItems = [
-  { path: '/',        icon: 'dashboard',    label: 'Nadzorna plošča' },
-  { path: '/voznje',  icon: 'directions_car', label: 'Vožnje' },
-  { path: '/vozniki', icon: 'group',        label: 'Vozniki' },
-  { path: '/racuni',  icon: 'receipt_long', label: 'Računi' },
-  { path: '/audit',   icon: 'history',      label: 'Dnevnik revizije' }
+  { path: '/',           icon: 'dashboard',      label: 'Nadzorna plošča', vloge: [1, 2, 3] },
+  { path: '/voznje',     icon: 'directions_car', label: 'Vožnje',           vloge: [1, 2, 3] },
+  { path: '/vozniki',    icon: 'group',          label: 'Vozniki',          vloge: [2, 3] },
+  { path: '/racuni',     icon: 'receipt_long',   label: 'Računi',           vloge: [2, 3] },
+  { path: '/prevozi',    icon: 'add_road',       label: 'Prevozi',          vloge: [2, 3] },
+  { path: '/audit',      icon: 'history',        label: 'Dnevnik revizije', vloge: [2] },
+  { path: '/uporabniki', icon: 'patient_list',   label: 'Uporabniki',       vloge: [2] },
+  { path: '/vozila',     icon: 'directions_bus', label: 'Vozila',           vloge: [2] },
 ]
 
 export default function Sidebar() {
   const { pathname } = useLocation()
-  const { handleLogout } = useAuth()
+  const { handleLogout, vloga } = useAuth()
 
   return (
     <aside className="bg-surface-container w-72 h-screen fixed left-0 top-0 border-r border-outline-variant flex flex-col py-6 px-4 z-50">
@@ -20,7 +23,7 @@ export default function Sidebar() {
         <p className="text-sm text-on-surface-variant">Logistični portal</p>
       </div>
       <nav className="flex-1 space-y-1">
-        {navItems.map(item => (
+        {navItems.filter(item => item.vloge.includes(vloga)).map(item => (
           <Link
             key={item.path}
             to={item.path}

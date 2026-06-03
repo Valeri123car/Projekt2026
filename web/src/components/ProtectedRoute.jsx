@@ -5,7 +5,10 @@ export default function ProtectedRoute({ children, vlogaRequired }) {
   const { token, vloga } = useAuthStore()
 
   if (!token) return <Navigate to="/login" />
-  if (vlogaRequired && vloga !== vlogaRequired) return <Navigate to="/" />
+  if (vlogaRequired) {
+    const allowed = Array.isArray(vlogaRequired) ? vlogaRequired : [vlogaRequired]
+    if (!allowed.includes(vloga)) return <Navigate to="/" />
+  }
 
   return children
 }

@@ -2,9 +2,13 @@ import React, { useState, useEffect } from "react";
 import Sidebar from "../components/Sidebar";
 import api from "../api/client";
 import TahografAdmin from "./TahografAdmin";
+import useAuthStore from "../store/authStore";
 
 export default function Voznje() {
   const ITEMS_PER_PAGE = 20;
+  const vloga = useAuthStore((s) => s.vloga);
+  const isVoznik = vloga === 1;
+  const isAdmin = vloga === 2;
 
   const [voznje, setVoznje] = useState([]);
   const [filteredVoznje, setFilteredVoznje] = useState([]);
@@ -29,9 +33,9 @@ export default function Voznje() {
     new Set(voznje.map((v) => JSON.stringify({ id: v.fk_uporabnik, ime: v.uporabnik?.ime, priimek: v.uporabnik?.priimek })))
   ).map((v) => JSON.parse(v)).sort((a, b) => (a.ime + a.priimek).localeCompare(b.ime + b.priimek));
 
-  useEffect(() => { 
+  useEffect(() => {
     fetchVoznje();
-    fetchAllVozniki();
+    if (!isVoznik) fetchAllVozniki();
   }, []);
   useEffect(() => { applyFiltersAndSort(); }, [voznje, filterDateFrom, filterDateTo, filterVoznik, sortBy]);
 
@@ -39,7 +43,7 @@ export default function Voznje() {
     try {
       setLoading(true);
       setError(null);
-      const response = await api.get("/admin/voznje");
+      const response = await api.get(isVoznik ? "/voznje" : "/admin/voznje");
       setVoznje(response.data);
     } catch (err) {
       setError(err.response?.data?.error || "Napaka pri nalaganju vožnj");
@@ -174,12 +178,14 @@ export default function Voznje() {
             >
               Vožnje
             </button>
-            <button
-              onClick={() => setActiveTab("tahograf")}
-              className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${activeTab === "tahograf" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
-            >
-              Tahografski zapisi
-            </button>
+            {!isVoznik && (
+              <button
+                onClick={() => setActiveTab("tahograf")}
+                className={`px-5 py-3 text-sm font-semibold border-b-2 transition-colors ${activeTab === "tahograf" ? "border-blue-600 text-blue-600" : "border-transparent text-gray-500 hover:text-gray-700"}`}
+              >
+                Tahografski zapisi
+              </button>
+            )}
           </div>
         </div>
 
@@ -190,40 +196,42 @@ export default function Voznje() {
             {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">{error}</div>}
             {uploadSuccess && <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">Datoteka je bila uspešno naložena</div>}
 
-            <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Naloži DDD ali Excel datoteko</label>
-                <div className="flex gap-3 items-center">
-                  <input type="file" accept=".ddd,.DDD,.xlsx,.xls"
-                    onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-                    disabled={uploadLoading}
-                    className="block text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
-                  />
-                  <button onClick={handleFileUpload} disabled={!selectedFile || uploadLoading}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
-                    {uploadLoading ? "Nalaganje..." : "Naloži"}
-                  </button>
+            {!isVoznik && (
+              <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Naloži DDD ali Excel datoteko</label>
+                  <div className="flex gap-3 items-center">
+                    <input type="file" accept=".ddd,.DDD,.xlsx,.xls"
+                      onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                      disabled={uploadLoading}
+                      className="block text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 disabled:opacity-50 disabled:cursor-not-allowed"
+                    />
+                    <button onClick={handleFileUpload} disabled={!selectedFile || uploadLoading}
+                      className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
+                      {uploadLoading ? "Nalaganje..." : "Naloži"}
+                    </button>
+                  </div>
                 </div>
-              </div>
 
-              <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
-                <label className="block text-sm font-medium text-gray-700 mb-2">Izvozi mesečno poročilo</label>
-                <div className="flex gap-3 items-center">
-                  <select multiple value={selectedExportVozniki.map(String)}
-                    onChange={(e) => setSelectedExportVozniki(Array.from(e.target.selectedOptions, (o) => parseInt(o.value)))}
-                    className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" size={1}>
-                    <option value="">Izberi voznika...</option>
-                    {allVozniki.map((v) => <option key={v.id} value={v.id}>{v.ime} {v.priimek}</option>)}
-                  </select>
-                  <input type="month" value={selectedExportMonth} onChange={(e) => setSelectedExportMonth(e.target.value)}
-                    className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <button onClick={handleExportMonthlyReport} disabled={selectedExportVozniki.length === 0}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
-                    Izvozi
-                  </button>
+                <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">Izvozi mesečno poročilo</label>
+                  <div className="flex gap-3 items-center">
+                    <select multiple value={selectedExportVozniki.map(String)}
+                      onChange={(e) => setSelectedExportVozniki(Array.from(e.target.selectedOptions, (o) => parseInt(o.value)))}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" size={1}>
+                      <option value="">Izberi voznika...</option>
+                      {allVozniki.map((v) => <option key={v.id} value={v.id}>{v.ime} {v.priimek}</option>)}
+                    </select>
+                    <input type="month" value={selectedExportMonth} onChange={(e) => setSelectedExportMonth(e.target.value)}
+                      className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                    <button onClick={handleExportMonthlyReport} disabled={selectedExportVozniki.length === 0}
+                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
+                      Izvozi
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )}
 
             <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
               <h2 className="text-lg font-semibold text-gray-900 mb-4">Filtri in razvrščanje</h2>
@@ -238,14 +246,16 @@ export default function Voznje() {
                   <input type="date" value={filterDateTo} onChange={(e) => setFilterDateTo(e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Voznik</label>
-                  <select value={filterVoznik} onChange={(e) => setFilterVoznik(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">Vsi vozniki</option>
-                    {uniqueVozniki.map((v) => <option key={v.id} value={v.id}>{v.ime} {v.priimek}</option>)}
-                  </select>
-                </div>
+                {!isVoznik && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Voznik</label>
+                    <select value={filterVoznik} onChange={(e) => setFilterVoznik(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                      <option value="">Vsi vozniki</option>
+                      {uniqueVozniki.map((v) => <option key={v.id} value={v.id}>{v.ime} {v.priimek}</option>)}
+                    </select>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Razvrsti po</label>
                   <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
@@ -287,7 +297,7 @@ export default function Voznje() {
                 <table className="w-full border-collapse bg-white">
                   <thead>
                     <tr className="bg-gray-100 border-b-2 border-gray-300">
-                      {["Voznik", "Začetek", "Konec", "Trajanje", "Relacija", "Stranka", "Opis"].map((h) => (
+                      {(isVoznik ? ["Začetek", "Konec", "Trajanje", "Relacija", "Stranka", "Opis"] : ["Voznik", "Začetek", "Konec", "Trajanje", "Relacija", "Stranka", "Opis"]).map((h) => (
                         <th key={h} className="px-6 py-3 text-left text-sm font-semibold text-gray-900">{h}</th>
                       ))}
                     </tr>
@@ -295,7 +305,7 @@ export default function Voznje() {
                   <tbody>
                     {filteredVoznje.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE).map((v) => (
                       <tr key={v.id_voznja} className="border-b border-gray-200 hover:bg-gray-50">
-                        <td className="px-6 py-4 text-sm font-medium text-gray-900">{v.uporabnik ? `${v.uporabnik.ime} ${v.uporabnik.priimek}` : "-"}</td>
+                        {!isVoznik && <td className="px-6 py-4 text-sm font-medium text-gray-900">{v.uporabnik ? `${v.uporabnik.ime} ${v.uporabnik.priimek}` : "-"}</td>}
                         <td className="px-6 py-4 text-sm text-gray-700">{formatDateTime(v.zacetek)}</td>
                         <td className="px-6 py-4 text-sm text-gray-700">{formatDateTime(v.konc)}</td>
                         <td className="px-6 py-4 text-sm text-gray-700">{izracunajTrajanje(v.zacetek, v.konc)}</td>
