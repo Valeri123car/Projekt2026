@@ -20,6 +20,10 @@ const endIcon = L.icon({
 const ROUTE_COLORS = ['#2563eb', '#f97316', '#8b5cf6', '#10b981', '#ef4444'];
 const geocodeCache = new Map();
 
+const UNKNOWN_VALUES = new Set(['neznano', 'unknown', '-', '']);
+
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
 const formatDurationLabel = (start, end) => {
   if (!start || !end) return '-';
   const diffMinutes = Math.floor((new Date(end) - new Date(start)) / 60000);
@@ -34,50 +38,68 @@ const parseRelacija = (relacija) => {
     return { from: 'Neznano', to: 'Neznano' };
   }
 
-  const arrowIndex = relacija.indexOf('->');
-  if (arrowIndex === -1) {
-    const value = relacija.trim();
-    return { from: value || 'Neznano', to: 'Neznano' };
+  const separators = [' -> ', '->', ' → ', '→'];
+  for (const sep of separators) {
+    const idx = relacija.indexOf(sep);
+    if (idx !== -1) {
+      const from = relacija.slice(0, idx).trim();
+      const to = relacija.slice(idx + sep.length).trim();
+      return {
+        from: from || 'Neznano',
+        to: to || 'Neznano',
+      };
+    }
   }
 
-  const from = relacija.slice(0, arrowIndex).trim();
-  const to = relacija.slice(arrowIndex + 2).trim();
-
-  return {
-    from: from || 'Neznano',
-    to: to || 'Neznano',
-  };
+  const value = relacija.trim();
+  return { from: value || 'Neznano', to: 'Neznano' };
 };
 
 function FitRouteBounds({ points }) {
   const map = useMap();
-
   useEffect(() => {
     if (points?.length > 1) {
       map.fitBounds(points, { padding: [30, 30] });
     }
   }, [map, points]);
-
   return null;
 }
 
 const geocodeLocation = async (locationName) => {
   const normalized = String(locationName || '').trim();
 
-  if (!normalized) return null;
+  if (!normalized || UNKNOWN_VALUES.has(normalized.toLowerCase())) return null;
+  if (normalized.includes('→') || normalized.includes('->')) return null;
 
-  if (geocodeCache.has(normalized)) {
-    return geocodeCache.get(normalized);
-  }
+  if (geocodeCache.has(normalized)) return geocodeCache.get(normalized);
 
   try {
-    const query = `${normalized}, Slovenia`;
     const res = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&addressdetails=1&countrycodes=si&q=${encodeURIComponent(query)}`
+      `/nominatim/search?format=jsonv2&limit=1&addressdetails=1&countrycodes=si&q=${encodeURIComponent(normalized + ', Slovenia')}`
     );
 
+    if (res.status === 429) {
+      console.warn(`Nominatim rate limit hit for "${normalized}" — retry after 2s`);
+      await sleep(2000);
+      const retry = await fetch(
+        `/nominatim/search?format=jsonv2&limit=1&addressdetails=1&countrycodes=si&q=${encodeURIComponent(normalized + ', Slovenia')}`
+      );
+      if (!retry.ok) {
+        geocodeCache.set(normalized, null);
+        return null;
+      }
+      const retryData = await retry.json();
+      if (retryData.length > 0) {
+        const result = [parseFloat(retryData[0].lat), parseFloat(retryData[0].lon)];
+        geocodeCache.set(normalized, result);
+        return result;
+      }
+      geocodeCache.set(normalized, null);
+      return null;
+    }
+
     if (!res.ok) {
-      console.warn(`Geocode request failed for "${query}" with status ${res.status}`);
+      console.warn(`Geocode failed for "${normalized}" — status ${res.status}`);
       geocodeCache.set(normalized, null);
       return null;
     }
@@ -99,7 +121,7 @@ const geocodeLocation = async (locationName) => {
 const fetchOsrmRoute = async (fromCoords, toCoords) => {
   try {
     const res = await fetch(
-      `https://router.project-osrm.org/route/v1/car/` +
+      `/osrm/route/v1/car/` +
       `${fromCoords[1]},${fromCoords[0]};${toCoords[1]},${toCoords[0]}` +
       `?overview=full&geometries=geojson`
     );
@@ -130,8 +152,7 @@ const PLACEHOLDER_ALERTS = [
   { id: 3, type: 'success', title: 'Servis uspešno opravljen', description: 'KP-SIRENA-03 - Pred 4h',           icon: 'check_circle'      },
 ];
 
-
-function StatCard({ label, value, unit, extra, iconName, bgColor, iconColor, trend }) {
+function StatCard({ label, value, unit, iconName, bgColor, iconColor, trend }) {
   return (
     <div className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200 shadow-sm">
       <div className="flex items-start justify-between mb-4">
@@ -145,7 +166,6 @@ function StatCard({ label, value, unit, extra, iconName, bgColor, iconColor, tre
         </div>
       </div>
       {trend && <p className="text-sm text-green-600 font-semibold">{trend}</p>}
-      {extra && <p className="text-xs text-gray-500 truncate">{extra}</p>}
     </div>
   );
 }
@@ -188,7 +208,8 @@ function RouteCard({ route, color, selected, onClick }) {
 }
 
 function RoutesMap({ selectedRoute, loading }) {
-  const center = { center: [46.15, 14.99], zoom: 8 };
+  const defaultCenter = [46.15, 14.99];
+  const defaultZoom = 8;
 
   if (loading) {
     return (
@@ -210,15 +231,22 @@ function RoutesMap({ selectedRoute, loading }) {
   if (!selectedRoute.fromCoords || !selectedRoute.toCoords) {
     return (
       <div className="h-full flex items-center justify-center text-gray-400 text-sm px-4 text-center">
-        Za izbrano pot ni bilo mogoce izracunati geolokacije.
+        Za izbrano pot ni bilo mogoče izračunati geolokacije.
+        <br />
+        <span className="text-xs mt-1 block text-gray-400">
+          ({selectedRoute.from} → {selectedRoute.to})
+        </span>
       </div>
     );
   }
 
-  const mapCenter = selectedRoute.fromCoords || center.center;
-
   return (
-    <MapContainer key={selectedRoute.id} center={mapCenter} zoom={center.zoom} style={{ height: '100%', width: '100%' }}>
+    <MapContainer
+      key={selectedRoute.id}
+      center={selectedRoute.fromCoords || defaultCenter}
+      zoom={defaultZoom}
+      style={{ height: '100%', width: '100%' }}
+    >
       <TileLayer
         url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
         attribution='&copy; OpenStreetMap contributors'
@@ -228,19 +256,16 @@ function RoutesMap({ selectedRoute, loading }) {
       )}
       {selectedRoute.coordinates && <FitRouteBounds points={selectedRoute.coordinates} />}
       <Marker position={selectedRoute.fromCoords} icon={startIcon}>
-        <Popup><strong>{selectedRoute.from}</strong><br /><small>Start - {selectedRoute.driver}</small></Popup>
+        <Popup><strong>{selectedRoute.from}</strong><br /><small>Start — {selectedRoute.driver}</small></Popup>
       </Marker>
       <Marker position={selectedRoute.toCoords} icon={endIcon}>
-        <Popup><strong>{selectedRoute.to}</strong><br /><small>Cilj - {selectedRoute.vehicle || '-'}</small></Popup>
+        <Popup><strong>{selectedRoute.to}</strong><br /><small>Cilj — {selectedRoute.vehicle || '-'}</small></Popup>
       </Marker>
     </MapContainer>
   );
 }
 
-// ─── Main Component ───────────────────────────────────────────────────────────
 export default function Dashboard() {
-  const today = new Date().toISOString().split('T')[0];
-
   const [statistics, setStatistics] = useState({
     totalHours: 0,
     totalKm: 0,
@@ -261,7 +286,6 @@ export default function Dashboard() {
   const [routeMapCache, setRouteMapCache] = useState({});
   const [activeTab, setActiveTab] = useState('dashboard');
 
-  // // TODO: dodati api endpointe za dinamicne prikaze
   useEffect(() => {
     const load = async () => {
       setDashLoading(true);
@@ -275,12 +299,7 @@ export default function Dashboard() {
         setRides(ridesRes.data);
         setAlerts(alertsRes.data);
       } catch {
-        setStatistics({
-          totalHours: 0,
-          totalKm: 0,
-          activeDrivers: 0,
-          totalDrivers: 0,
-        });
+        setStatistics({ totalHours: 0, totalKm: 0, activeDrivers: 0, totalDrivers: 0 });
         setRides(PLACEHOLDER_RIDES);
         setAlerts(PLACEHOLDER_ALERTS);
       } finally {
@@ -303,7 +322,6 @@ export default function Dashboard() {
       const mappedRoutes = (response.data || []).map((ride) => {
         const { from, to } = parseRelacija(ride.relacija);
         const dateValue = ride.datum || ride.zacetek;
-
         return {
           id: `RT-${ride.id_voznja}`,
           id_voznja: ride.id_voznja,
@@ -320,7 +338,6 @@ export default function Dashboard() {
           konc: ride.konc,
         };
       });
-
       setRoutes(mappedRoutes);
       setSelectedRouteId(null);
       setSelectedRouteMapData(null);
@@ -328,14 +345,12 @@ export default function Dashboard() {
       console.error('fetchRoutes error:', err);
       setRoutes([]);
       setRoutesError('Poti ni bilo mogoče naložiti iz baze.');
-      setSelectedRouteId(null);
-      setSelectedRouteMapData(null);
     } finally {
       setRoutesLoading(false);
     }
   }, []);
 
-  const loadRoutes = useCallback(async (from, to, route = null) => {
+  const loadRouteMap = useCallback(async (from, to, route = null) => {
     const normalizedFrom = String(from || '').trim();
     const normalizedTo = String(to || '').trim();
 
@@ -348,14 +363,7 @@ export default function Dashboard() {
     const routeKey = `${normalizedFrom}__${normalizedTo}`;
     const routeInfo = route
       ? { ...route, from: normalizedFrom, to: normalizedTo }
-      : {
-          id: routeKey,
-          from: normalizedFrom,
-          to: normalizedTo,
-          driver: 'Neznani voznik',
-          vehicle: '-',
-          status: 'pending',
-        };
+      : { id: routeKey, from: normalizedFrom, to: normalizedTo, driver: 'Neznani voznik', vehicle: '-', status: 'pending' };
 
     setSelectedRouteId(routeInfo.id);
 
@@ -366,13 +374,11 @@ export default function Dashboard() {
 
     setSelectedRouteLoading(true);
     try {
-      const [fromCoords, toCoords] = await Promise.all([
-        geocodeLocation(normalizedFrom),
-        geocodeLocation(normalizedTo),
-      ]);
+      const fromCoords = await geocodeLocation(normalizedFrom);
+      await sleep(1100);
+      const toCoords = await geocodeLocation(normalizedTo);
 
       if (!fromCoords || !toCoords) {
-        console.warn('Geolocation not found for route', { from: normalizedFrom, to: normalizedTo });
         const fallbackData = { ...routeInfo, fromCoords: null, toCoords: null, coordinates: null };
         setSelectedRouteMapData(fallbackData);
         setRouteMapCache((prev) => ({ ...prev, [routeKey]: fallbackData }));
@@ -380,16 +386,11 @@ export default function Dashboard() {
       }
 
       const routeGeo = await fetchOsrmRoute(fromCoords, toCoords);
-      const fullData = {
-        ...routeInfo,
-        fromCoords,
-        toCoords,
-        coordinates: routeGeo?.coordinates || null,
-      };
+      const fullData = { ...routeInfo, fromCoords, toCoords, coordinates: routeGeo?.coordinates || null };
       setSelectedRouteMapData(fullData);
       setRouteMapCache((prev) => ({ ...prev, [routeKey]: fullData }));
     } catch (err) {
-      console.error('loadRoutes map error:', err);
+      console.error('loadRouteMap error:', err);
       setRoutesError('Napaka pri prikazu poti na zemljevidu.');
     } finally {
       setSelectedRouteLoading(false);
@@ -397,13 +398,11 @@ export default function Dashboard() {
   }, [routeMapCache]);
 
   useEffect(() => {
-    if (activeTab === 'routes') {
-      fetchRoutes();
-    }
+    if (activeTab === 'routes') fetchRoutes();
   }, [activeTab, fetchRoutes]);
 
   useEffect(() => {
-    if (selectedRouteId && !displayRoutes.some((route) => route.id === selectedRouteId)) {
+    if (selectedRouteId && !displayRoutes.some((r) => r.id === selectedRouteId)) {
       setSelectedRouteId(null);
       setSelectedRouteMapData(null);
     }
@@ -414,7 +413,6 @@ export default function Dashboard() {
       <Sidebar />
       <main className="ml-72 flex-1 p-4 sm:p-6 lg:p-8 bg-gray-50 min-h-screen">
 
-        {/* Header */}
         <div className="mb-8">
           <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-4 mb-6">
             <div>
@@ -423,7 +421,6 @@ export default function Dashboard() {
             </div>
           </div>
 
-          {/* Tabs */}
           <div className="flex gap-4 border-b border-gray-200 overflow-x-auto">
             {[
               { key: 'dashboard', label: 'Nadzorna plošča' },
@@ -448,9 +445,9 @@ export default function Dashboard() {
         {activeTab === 'dashboard' && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-8">
-              <StatCard label="Skupne ure"      value={statistics.totalHours.toLocaleString()} unit="h"  iconName="schedule"      bgColor="bg-blue-100"   iconColor="text-blue-600"   trend="↑ 12%" />
-              <StatCard label="Skupni kilometri" value={statistics.totalKm.toLocaleString()}   unit="km" iconName="route"         bgColor="bg-orange-100" iconColor="text-orange-600" trend="↑ 5.6%" />
-              <StatCard label="Vozniki v bazi"   value={statistics.totalDrivers.toLocaleString()} unit="voznikov" iconName="group" bgColor="bg-green-100" iconColor="text-green-600" trend={`${statistics.activeDrivers} aktivnih`} />
+              <StatCard label="Skupne ure"       value={statistics.totalHours.toLocaleString()} unit="h"        iconName="schedule" bgColor="bg-blue-100"   iconColor="text-blue-600"   trend="↑ 12%"                                  />
+              <StatCard label="Skupni kilometri" value={statistics.totalKm.toLocaleString()}   unit="km"       iconName="route"    bgColor="bg-orange-100" iconColor="text-orange-600" trend="↑ 5.6%"                                 />
+              <StatCard label="Vozniki v bazi"   value={statistics.totalDrivers.toLocaleString()} unit="voznikov" iconName="group" bgColor="bg-green-100"  iconColor="text-green-600"  trend={`${statistics.activeDrivers} aktivnih`} />
             </div>
 
             <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-8 shadow-sm">
@@ -463,13 +460,6 @@ export default function Dashboard() {
                     <button key={label} className={`px-3 py-1.5 text-xs sm:text-sm rounded-lg font-medium ${
                       i === 0 ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                     }`}>{label}</button>
-                  ))}
-                </div>
-                <div className="ml-auto flex gap-2">
-                  {['grid_3x3', 'people'].map(icon => (
-                    <button key={icon} className="px-3 py-1.5 bg-white text-gray-700 border border-gray-300 text-xs sm:text-sm rounded-lg font-medium hover:bg-gray-50 flex items-center gap-1">
-                      <span className="material-symbols-outlined text-sm">{icon}</span>
-                    </button>
                   ))}
                 </div>
               </div>
@@ -573,7 +563,7 @@ export default function Dashboard() {
                 </div>
                 <div className="h-64 sm:h-80 rounded-lg border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center px-4 text-center">
                   <div>
-                    <p className="text-sm font-semibold text-gray-700">Zemljevid se nalozi sele po izbiri poti</p>
+                    <p className="text-sm font-semibold text-gray-700">Zemljevid se naloži šele po izbiri poti</p>
                     <p className="text-xs text-gray-500 mt-1">Odpri zavihek Prikaz poti, izberi datum in klikni relacijo.</p>
                   </div>
                 </div>
@@ -613,7 +603,7 @@ export default function Dashboard() {
           <>
             <div className="mb-6">
               <h2 className="text-xl font-bold text-gray-900 mb-1">Prikaz poti</h2>
-              <p className="text-gray-500 text-sm">Najprej se nalozi seznam poti, zemljevid pa sele ob kliku na relacijo.</p>
+              <p className="text-gray-500 text-sm">Seznam poti se naloži takoj, zemljevid pa šele ob kliku na relacijo.</p>
             </div>
 
             <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-6 shadow-sm">
@@ -662,7 +652,7 @@ export default function Dashboard() {
                         route={route}
                         color={ROUTE_COLORS[idx % ROUTE_COLORS.length]}
                         selected={route.id === selectedRouteId}
-                        onClick={() => loadRoutes(route.from, route.to, route)}
+                        onClick={() => loadRouteMap(route.from, route.to, route)}
                       />
                     ))
                   )}
@@ -677,7 +667,7 @@ export default function Dashboard() {
 
             <div className="mt-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
               <p className="text-sm text-blue-900">
-                <strong>Opomba:</strong> Seznam poti se nalozi takoj, zemljevid pa sele po kliku na posamezno pot.
+                <strong>Opomba:</strong> Seznam poti se naloži takoj, zemljevid pa šele po kliku na posamezno pot. Geokodiranje poteka sekvencialno (1s zamik) skladno s pogoji uporabe Nominatim API.
               </p>
             </div>
           </>
