@@ -418,9 +418,8 @@ export default async function admin(app) {
       };
     },
   );
-
-// ── Stranke ──────────────────────────────────────────────────────────────────
-
+ // ── Stranke ──────────────────────────────────────────────────────────────────
+ 
   app.get("/stranke", { onRequest: [app.authenticate, adminOnly] }, async () => {
     return app.prisma.stranka.findMany({ orderBy: { naziv: "asc" } });
   });
@@ -488,23 +487,24 @@ export default async function admin(app) {
     async (request) => {
       const { datum, exclude_id } = request.query;
  
-      // Match all urnik rows whose datum falls on this calendar day
-      const dayStart = new Date(`${datum}T00:00:00`);
-      const dayEnd   = new Date(`${datum}T23:59:59`);
+      // Cast both sides to DATE so time component is ignored.
+      // This works regardless of whether datum was stored as a plain date
+      // or as a full timestamp with time embedded.
+      const excludeClause = exclude_id
+        ? `AND id_urnik != ${parseInt(exclude_id)}`
+        : '';
  
-      const where = {
-        datum: { gte: dayStart, lte: dayEnd },
-        ...(exclude_id ? { id_urnik: { not: parseInt(exclude_id) } } : {}),
-      };
+      const zasedeni = await app.prisma.$queryRawUnsafe(`
+        SELECT fk_vozilo, fk_uporabnik
+        FROM "Urnik"
+        WHERE datum::date = $1::date
+        ${excludeClause}
+      `, datum);
  
-      const zasedeni = await app.prisma.urnik.findMany({
-        where,
-        select: { fk_vozilo: true, fk_uporabnik: true },
-      });
- 
+      // $queryRawUnsafe returns BigInt for integer columns — convert to Number
       return {
-        vozila:  [...new Set(zasedeni.map((z) => z.fk_vozilo))],
-        vozniki: [...new Set(zasedeni.map((z) => z.fk_uporabnik))],
+        vozila:  [...new Set(zasedeni.map((z) => Number(z.fk_vozilo)))],
+        vozniki: [...new Set(zasedeni.map((z) => Number(z.fk_uporabnik)))],
       };
     },
   );
@@ -642,4 +642,3 @@ export default async function admin(app) {
     },
   );
 }
- 
