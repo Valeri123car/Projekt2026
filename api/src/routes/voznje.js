@@ -147,7 +147,7 @@ export default async function voznje(app) {
       // Fetch data for selected month from TahografZapis
       const voznjeMesec = await app.prisma.tahografZapis.findMany({
         where: {
-          fk_uporabnik: { in: voznikIds },
+          fk_uporabnik: voznikIds[0],
           zacetek: {
             gte: monthFromDate,
             lte: monthToDate,

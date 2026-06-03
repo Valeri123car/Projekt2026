@@ -208,6 +208,148 @@ export default async function admin(app) {
   );
 
   app.get(
+    "/uporabniki",
+    {
+      onRequest: [app.authenticate, adminOnly],
+      schema: { description: "Vrni vse uporabnike (samo admin)" },
+    },
+    async () => {
+      return app.prisma.uporabnik.findMany({
+        select: {
+          id_uporabnik: true,
+          ime: true,
+          priimek: true,
+          email: true,
+          dostop: true,
+          gdpr_soglasje: true,
+          gdpr_datum: true,
+          fk_postavka: true,
+        },
+        orderBy: { priimek: "asc" },
+      });
+    },
+  );
+
+  
+  app.put(
+    "/uporabniki/:id",
+    {
+      onRequest: [app.authenticate, adminOnly],
+      schema: {
+        description: "Posodobi podatke uporabnika (samo admin)",
+        params: {
+          type: "object",
+          properties: { id: { type: "integer" } },
+          required: ["id"],
+        },
+        body: {
+          type: "object",
+          properties: {
+            ime: { type: "string" },
+            priimek: { type: "string" },
+            email: { type: "string", format: "email" },
+            geslo: { type: "string", minLength: 6 },
+            dostop: { type: "integer", enum: [1, 2, 3] },
+            emso: { type: "string" },
+            gdpr_soglasje: { type: "boolean" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { ime, priimek, email, geslo, dostop, emso, gdpr_soglasje } = request.body;
+
+      const obstaja = await app.prisma.uporabnik.findUnique({
+        where: { id_uporabnik: parseInt(id) },
+      });
+      if (!obstaja) {
+        return reply.code(404).send({ error: "Uporabnik ne obstaja" });
+      }
+
+      
+      if (email && email !== obstaja.email) {
+        const emailObstaja = await app.prisma.uporabnik.findUnique({
+          where: { email },
+        });
+        if (emailObstaja) {
+          return reply.code(409).send({ error: "Email že obstaja" });
+        }
+      }
+
+      const data = {};
+      if (ime !== undefined) data.ime = ime;
+      if (priimek !== undefined) data.priimek = priimek;
+      if (email !== undefined) data.email = email;
+      if (dostop !== undefined) data.dostop = dostop;
+      if (gdpr_soglasje !== undefined) {
+        data.gdpr_soglasje = gdpr_soglasje;
+        if (gdpr_soglasje && !obstaja.gdpr_datum) {
+          data.gdpr_datum = new Date();
+        }
+      }
+      if (emso) {
+        data.emso_crypted = app.encrypt(emso);
+      }
+      if (geslo) {
+        const bcrypt = await import("bcryptjs");
+        data.geslo = await bcrypt.default.hash(geslo, 12);
+      }
+
+      const posodobljen = await app.prisma.uporabnik.update({
+        where: { id_uporabnik: parseInt(id) },
+        data,
+        select: {
+          id_uporabnik: true,
+          ime: true,
+          priimek: true,
+          email: true,
+          dostop: true,
+          gdpr_soglasje: true,
+          gdpr_datum: true,
+        },
+      });
+
+      return posodobljen;
+    },
+  );
+
+  app.delete(
+    "/uporabniki/:id",
+    {
+      onRequest: [app.authenticate, adminOnly],
+      schema: {
+        description: "Izbriši uporabnika (samo admin)",
+        params: {
+          type: "object",
+          properties: { id: { type: "integer" } },
+          required: ["id"],
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+
+      if (request.user.id_uporabnik === parseInt(id)) {
+        return reply.code(400).send({ error: "Ne morete izbrisati lastnega računa" });
+      }
+
+      const obstaja = await app.prisma.uporabnik.findUnique({
+        where: { id_uporabnik: parseInt(id) },
+      });
+      if (!obstaja) {
+        return reply.code(404).send({ error: "Uporabnik ne obstaja" });
+      }
+
+      await app.prisma.uporabnik.delete({
+        where: { id_uporabnik: parseInt(id) },
+      });
+
+      return reply.code(204).send();
+    },
+  );
+
+  app.get(
     "/audit",
     {
       onRequest: [app.authenticate, adminOnly],
