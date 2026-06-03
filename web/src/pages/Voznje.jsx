@@ -16,6 +16,7 @@ export default function Voznje() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [uploadLoading, setUploadLoading] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [selectedFile, setSelectedFile] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
@@ -69,6 +70,7 @@ export default function Voznje() {
   const handleExportMonthlyReport = async () => {
     if (selectedExportVozniki.length === 0) { alert("Izberi vsaj enega voznika"); return; }
     try {
+      setExportLoading(true);
       const [year, month] = selectedExportMonth.split("-").map(Number);
       const monthStr = String(month).padStart(2, "0");
       const firstDay = `${year}-${monthStr}-01`;
@@ -78,11 +80,20 @@ export default function Voznje() {
       selectedExportVozniki.forEach((id) => params.append("fk_uporabnik", id));
       params.append("od", firstDay);
       params.append("do", lastDay);
-      const response = await api.get(`/voznje/voznjeMesec?${params.toString()}`);
-      console.log("Monthly report:", response.data);
+      const response = await api.get(`/voznje/voznjeMesec/export?${params.toString()}`, {
+        responseType: "blob",
+      });
+      const url = URL.createObjectURL(response.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `delovni_zapis_${firstDay}_${lastDay}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Error:", err);
       alert("Napaka pri izvozu mesečnega poročila");
+    } finally {
+      setExportLoading(false);
     }
   };
 
@@ -224,9 +235,11 @@ export default function Voznje() {
                     </select>
                     <input type="month" value={selectedExportMonth} onChange={(e) => setSelectedExportMonth(e.target.value)}
                       className="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                    <button onClick={handleExportMonthlyReport} disabled={selectedExportVozniki.length === 0}
-                      className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
-                      Izvozi
+                    <button onClick={handleExportMonthlyReport} disabled={selectedExportVozniki.length === 0 || exportLoading}
+                      className="inline-flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white font-medium rounded-lg disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap">
+                      {exportLoading
+                        ? <><span className="material-symbols-outlined text-[18px] animate-spin">sync</span>Izvažam...</>
+                        : 'Izvozi'}
                     </button>
                   </div>
                 </div>
