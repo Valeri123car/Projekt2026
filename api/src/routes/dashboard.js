@@ -5,6 +5,7 @@ const dashboardQuerySchema = {
     fk_stranka: { type: "integer" },
     od: { type: "string", format: "date" },
     do: { type: "string", format: "date" },
+    date: { type: "string", format: "date" },
   },
 };
 
@@ -204,6 +205,73 @@ function buildAlerts({ voznje, urniki, statistics }) {
  
   return alerts;
 }
+
+function splitRelacija(relacija) {
+  if (!relacija || typeof relacija !== "string") {
+    return { from: "Neznano", to: "Neznano" };
+  }
+
+  const separators = ["->", "-", "/", " do "];
+  for (const separator of separators) {
+    if (relacija.includes(separator)) {
+      const [fromRaw, toRaw] = relacija.split(separator);
+      const from = (fromRaw || "").trim() || "Neznano";
+      const to = (toRaw || "").trim() || "Neznano";
+      return { from, to };
+    }
+  }
+
+  return { from: relacija.trim(), to: "Neznano" };
+}
+
+function formatDurationLabel(start, end) {
+  if (!start || !end) return "-";
+  const diffMinutes = Math.floor((new Date(end) - new Date(start)) / 60000);
+  if (!Number.isFinite(diffMinutes) || diffMinutes <= 0) return "-";
+
+  const hours = Math.floor(diffMinutes / 60);
+  const minutes = diffMinutes % 60;
+  return `${hours}h ${String(minutes).padStart(2, "0")}min`;
+}
+
+async function loadRoutesList(app, query) {
+  const selectedDate = query.date || new Date().toISOString().slice(0, 10);
+  const startDate = new Date(selectedDate);
+  const endDate = new Date(selectedDate);
+  endDate.setHours(23, 59, 59, 999);
+
+  const voznje = await app.prisma.voznja.findMany({
+    where: {
+      zacetek: {
+        gte: startDate,
+        lte: endDate,
+      },
+    },
+    orderBy: { zacetek: "desc" },
+    include: {
+      uporabnik: { select: { ime: true, priimek: true } },
+    },
+  });
+
+  return voznje.map((voznja) => {
+    const driverName = `${voznja.uporabnik?.ime || ""} ${voznja.uporabnik?.priimek || ""}`.trim() || "Neznani voznik";
+    const { from, to } = splitRelacija(voznja.relacija);
+
+    return {
+      id: `RT-${voznja.id_voznja}`,
+      id_voznja: voznja.id_voznja,
+      date: new Date(voznja.datum || voznja.zacetek).toISOString().slice(0, 10),
+      driver: driverName,
+      vehicle: voznja.registerska || "-",
+      from,
+      to,
+      status: voznja.konc && new Date(voznja.konc).getTime() < Date.now() ? "completed" : "pending",
+      durationLabel: formatDurationLabel(voznja.zacetek, voznja.konc),
+      stranka: voznja.stranka || "-",
+      opis: voznja.opis || voznja.aktivnost || "-",
+    };
+  });
+}
  
 async function loadDashboardData(app, query) {
   const { whereVoznje, whereUrnik } = buildDashboardFilters(query);
@@ -354,5 +422,9 @@ export default async function dashboard(app) {
   app.get("/alerts", routeOptions, async (request) => {
     const data = await loadDashboardData(app, request.query);
     return data.alerts;
+  });
+
+  app.get("/routes", routeOptions, async (request) => {
+    return loadRoutesList(app, request.query);
   });
 }
