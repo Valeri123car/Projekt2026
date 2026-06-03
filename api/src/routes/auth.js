@@ -98,6 +98,52 @@ export default async function auth(app) {
     },
   );
 
+  app.get(
+    "/me",
+    { onRequest: [app.authenticate] },
+    async (request) => {
+      return app.prisma.uporabnik.findUnique({
+        where: { id_uporabnik: request.user.id },
+        select: { id_uporabnik: true, ime: true, priimek: true, email: true, dostop: true },
+      });
+    },
+  );
+
+  app.put(
+    "/me",
+    {
+      onRequest: [app.authenticate],
+      schema: {
+        body: {
+          type: "object",
+          properties: {
+            ime:     { type: "string", minLength: 1 },
+            priimek: { type: "string", minLength: 1 },
+            geslo:   { type: "string", minLength: 6 },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { ime, priimek, geslo } = request.body;
+      const data = {};
+      if (ime)     data.ime     = ime;
+      if (priimek) data.priimek = priimek;
+      if (geslo)   data.geslo   = await bcrypt.hash(geslo, 12);
+
+      if (!Object.keys(data).length) {
+        return reply.code(400).send({ error: "Ni podatkov za posodobitev." });
+      }
+
+      const updated = await app.prisma.uporabnik.update({
+        where: { id_uporabnik: request.user.id },
+        data,
+        select: { id_uporabnik: true, ime: true, priimek: true, email: true, dostop: true },
+      });
+      return updated;
+    },
+  );
+
   app.delete(
     "/me",
     {

@@ -10,6 +10,7 @@ import Voznje from './pages/Voznje'
 import Uporabniki from './pages/Uporabniki'
 import Vozila from './pages/Vozila'
 import Prevozi from './pages/Prevozi'
+import Nastavitve from './pages/Nastavitve'
 
 const queryClient = new QueryClient()
 
@@ -27,6 +28,7 @@ export default function App() {
           <Route path="/audit" element={<ProtectedRoute vlogaRequired={2}><AuditLog /></ProtectedRoute>} />
           <Route path="/vozila" element={<ProtectedRoute vlogaRequired={2}><Vozila /></ProtectedRoute>} />
           <Route path="/prevozi" element={<ProtectedRoute vlogaRequired={[2, 3]}><Prevozi /></ProtectedRoute>} />
+          <Route path="/nastavitve" element={<ProtectedRoute><Nastavitve /></ProtectedRoute>} />
           <Route path="*" element={<Navigate to="/" />} />
         </Routes>
       </BrowserRouter>

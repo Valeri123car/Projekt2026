@@ -196,7 +196,7 @@ export default function Voznje() {
             {error && <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-700">{error}</div>}
             {uploadSuccess && <div className="mb-4 p-4 bg-green-50 border border-green-200 rounded-lg text-green-700">Datoteka je bila uspešno naložena</div>}
 
-            {isAdmin && (
+            {!isVoznik && (
               <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="p-4 bg-gray-50 rounded-lg border border-gray-200">
                   <label className="block text-sm font-medium text-gray-700 mb-2">Naloži DDD ali Excel datoteko</label>
