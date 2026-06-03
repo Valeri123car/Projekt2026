@@ -418,10 +418,9 @@ export default async function admin(app) {
       };
     },
   );
-}
 
 // ── Stranke ──────────────────────────────────────────────────────────────────
- 
+
   app.get("/stranke", { onRequest: [app.authenticate, adminOnly] }, async () => {
     return app.prisma.stranka.findMany({ orderBy: { naziv: "asc" } });
   });
@@ -642,4 +641,5 @@ export default async function admin(app) {
       return reply.code(204).send();
     },
   );
+}
  
