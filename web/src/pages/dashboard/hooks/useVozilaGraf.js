@@ -8,6 +8,7 @@ export function useVozilaGraf(selectedMonth) {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    // NOSONAR: S2004 - funkcije niso gnezdene globlje kot 2 nivoja, zato je fetch definirana tukaj
     const fetch = async () => {
       setLoading(true);
       try {

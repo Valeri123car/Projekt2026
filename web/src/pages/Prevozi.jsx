@@ -208,47 +208,28 @@ VoziloVoznikSelector.propTypes = {
   setSelectedVoznik:    PropTypes.func.isRequired,
 };
 
-// ─── New/Edit Modal ───────────────────────────────────────────────────────────
-function PrevozModal({ mode, prevoz, onClose, onSaved }) {
+// ─── Custom hooks for state initialization and availability check ────────────
+function useModalInitialState(mode, prevoz) {
   const isEdit = mode === 'edit';
+  
+  return useMemo(() => ({
+    isEdit,
+    datum: isEdit ? toInputDate(prevoz.datum) : '',
+    ura: isEdit ? toInputTime(prevoz.datum) : '08:00',
+    naziv: isEdit ? (prevoz.naziv ?? '') : '',
+    cena: isEdit ? (prevoz.cena ?? '') : '',
+    placano: isEdit ? prevoz.placano : false,
+    selectedStranka: isEdit ? String(prevoz.fk_stranka) : '',
+    selectedVozilo: isEdit ? String(prevoz.fk_vozilo) : '',
+    selectedVoznik: isEdit ? String(prevoz.fk_uporabnik) : '',
+  }), [mode, prevoz]);
+}
 
-  const [datum, setDatum]                             = useState(isEdit ? toInputDate(prevoz.datum) : '');
-  const [ura, setUra]                                 = useState(isEdit ? toInputTime(prevoz.datum) : '08:00');
-  const [naziv, setNaziv]                             = useState(isEdit ? (prevoz.naziv ?? '') : '');
-  const [cena, setCena]                               = useState(isEdit ? (prevoz.cena ?? '') : '');
-  const [placano, setPlacano]                         = useState(isEdit ? prevoz.placano : false);
-  const [strankeList, setStrankeList]                 = useState([]);
-  const [selectedStranka, setSelectedStranka]         = useState(isEdit ? String(prevoz.fk_stranka) : '');
-  const [newStranka, setNewStranka]                   = useState(false);
-  const [strankaForm, setStrankaForm]                 = useState({ naziv: '', email: '', telefonska: '', davcna_st: '' });
-  const [vsiVozila, setVsiVozila]                     = useState([]);
-  const [vsiVozniki, setVsiVozniki]                   = useState([]);
-  const [selectedVozilo, setSelectedVozilo]           = useState(isEdit ? String(prevoz.fk_vozilo) : '');
-  const [selectedVoznik, setSelectedVoznik]           = useState(isEdit ? String(prevoz.fk_uporabnik) : '');
-  const [zasedenaVozila, setZasedenaVozila]           = useState([]);
-  const [zasedeniVozniki, setZasedeniVozniki]         = useState([]);
-  const [availabilityLoaded, setAvailabilityLoaded]   = useState(false);
+function useAvailabilityCheck(datum, isEdit, prevoz) {
+  const [zasedenaVozila, setZasedenaVozila] = useState([]);
+  const [zasedeniVozniki, setZasedeniVozniki] = useState([]);
+  const [availabilityLoaded, setAvailabilityLoaded] = useState(false);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
-  const [saving, setSaving]                           = useState(false);
-  const [error, setError]                             = useState(null);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [sRes, vozilaRes, voznikiRes] = await Promise.all([
-          api.get('/admin/stranke'),
-          api.get('/admin/vozila'),
-          api.get('/admin/vozniki'),
-        ]);
-        setStrankeList(sRes.data || []);
-        setVsiVozila(vozilaRes.data || []);
-        setVsiVozniki(voznikiRes.data || []);
-      } catch (e) {
-        console.error('Load error', e);
-      }
-    };
-    load();
-  }, []);
 
   useEffect(() => {
     if (!datum) {
@@ -258,7 +239,8 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
       setAvailabilityLoading(false);
       return;
     }
-    const check = async () => {
+
+    const checkAvailability = async () => {
       try {
         setAvailabilityLoading(true);
         const excludeParam = isEdit ? `&exclude_id=${prevoz.id_urnik}` : '';
@@ -273,8 +255,56 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
         setAvailabilityLoading(false);
       }
     };
-    check();
-  }, [datum]);
+
+    checkAvailability();
+  }, [datum, isEdit, prevoz]);
+
+  return { zasedenaVozila, zasedeniVozniki, availabilityLoaded, availabilityLoading };
+}
+
+// ─── New/Edit Modal ───────────────────────────────────────────────────────────
+function PrevozModal({ mode, prevoz, onClose, onSaved }) {
+  const initialState = useModalInitialState(mode, prevoz);
+  const { isEdit, datum: initialDatum, ura: initialUra, naziv: initialNaziv, 
+          cena: initialCena, placano: initialPlacano, selectedStranka: initialStranka,
+          selectedVozilo: initialVozilo, selectedVoznik: initialVoznik } = initialState;
+
+  const [datum, setDatum] = useState(initialDatum);
+  const [ura, setUra] = useState(initialUra);
+  const [naziv, setNaziv] = useState(initialNaziv);
+  const [cena, setCena] = useState(initialCena);
+  const [placano, setPlacano] = useState(initialPlacano);
+  const [strankeList, setStrankeList] = useState([]);
+  const [selectedStranka, setSelectedStranka] = useState(initialStranka);
+  const [newStranka, setNewStranka] = useState(false);
+  const [strankaForm, setStrankaForm] = useState({ naziv: '', email: '', telefonska: '', davcna_st: '' });
+  const [vsiVozila, setVsiVozila] = useState([]);
+  const [vsiVozniki, setVsiVozniki] = useState([]);
+  const [selectedVozilo, setSelectedVozilo] = useState(initialVozilo);
+  const [selectedVoznik, setSelectedVoznik] = useState(initialVoznik);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState(null);
+
+  const { zasedenaVozila, zasedeniVozniki, availabilityLoaded, availabilityLoading } = 
+    useAvailabilityCheck(datum, isEdit, prevoz);
+
+  useEffect(() => {
+    const loadMasterData = async () => {
+      try {
+        const [sRes, vozilaRes, voznikiRes] = await Promise.all([
+          api.get('/admin/stranke'),
+          api.get('/admin/vozila'),
+          api.get('/admin/vozniki'),
+        ]);
+        setStrankeList(sRes.data || []);
+        setVsiVozila(vozilaRes.data || []);
+        setVsiVozniki(voznikiRes.data || []);
+      } catch (e) {
+        console.error('Load error', e);
+      }
+    };
+    loadMasterData();
+  }, []);
 
   const setS = (field) => (e) => setStrankaForm((p) => ({ ...p, [field]: e.target.value }));
 
@@ -282,7 +312,6 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
     setDatum(e.target.value);
     setSelectedVozilo('');
     setSelectedVoznik('');
-    setAvailabilityLoaded(false);
   };
 
   const handleSubmit = async () => {
@@ -302,13 +331,13 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
     try {
       setSaving(true);
       const body = {
-        datum:        combineDatumUra(datum, ura),
-        naziv:        naziv || undefined,
-        cena:         cena !== '' ? Number.parseFloat(cena) : undefined,
+        datum: combineDatumUra(datum, ura),
+        naziv: naziv || undefined,
+        cena: cena !== '' ? Number.parseFloat(cena) : undefined,
         placano,
-        fk_vozilo:    Number.parseInt(selectedVozilo),
+        fk_vozilo: Number.parseInt(selectedVozilo),
         fk_uporabnik: Number.parseInt(selectedVoznik),
-        fk_stranka:   Number.parseInt(strankaId),
+        fk_stranka: Number.parseInt(strankaId),
       };
       await shraniPrevoz({ isEdit, prevoz, body });
       onSaved();
@@ -742,18 +771,18 @@ export default function Prevozi() {
                             <p className="text-xs text-slate-500">{toInputTime(u.datum)}</p>
                           </div>
                         </div>
-                      </td>
+                       </td>
                       <td className="px-4 py-4">
                         <p className="font-medium text-slate-800">{u.stranka?.naziv ?? '-'}</p>
                         {u.stranka?.telefonska && <p className="text-xs text-slate-500">{u.stranka.telefonska}</p>}
-                      </td>
+                       </td>
                       <td className="px-4 py-4">
                         <p className="font-medium text-slate-800">{u.vozilo?.registerska ?? '-'}</p>
                         {u.vozilo?.tip_vozila?.naziv && <p className="text-xs text-slate-500">{u.vozilo.tip_vozila.naziv}</p>}
-                      </td>
+                       </td>
                       <td className="px-4 py-4 text-slate-700">
                         {u.uporabnik ? `${u.uporabnik.ime} ${u.uporabnik.priimek}` : '-'}
-                      </td>
+                       </td>
                       <td className="px-4 py-4 text-slate-600 text-sm max-w-[160px] truncate">{u.naziv || '-'}</td>
                       <td className="px-4 py-4 font-semibold text-slate-800">{formatCena(u.cena)}</td>
                       <td className="px-4 py-4">
@@ -768,7 +797,7 @@ export default function Prevozi() {
                           </span>
                           {u.placano ? 'Plačano' : 'Neplačano'}
                         </button>
-                      </td>
+                       </td>
                       <td className="px-5 py-4 text-right">
                         <div className="inline-flex items-center gap-1">
                           <button type="button" onClick={() => setModal({ type: 'edit', prevoz: u })}
@@ -780,11 +809,11 @@ export default function Prevozi() {
                             <span className="material-symbols-outlined text-[18px]">delete</span>
                           </button>
                         </div>
-                      </td>
+                       </td>
                     </tr>
                   ))}
                 </tbody>
-              </table>
+               </table>
             </div>
             <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
               <p>
@@ -811,4 +840,4 @@ export default function Prevozi() {
       </main>
     </div>
   );
-} 
+}
