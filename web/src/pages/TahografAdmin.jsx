@@ -38,19 +38,29 @@ function formatTrajanje(min) {
 }
 
 // ── Filter funkcija izvlečena iz .filter callback ─────────────────────────────
-function filterZapis(z, filters) {
-  const zacetek = new Date(z.zacetek);
+function filterDatum(zacetek, filters) {
   if (filters.od && zacetek < new Date(filters.od)) return false;
   if (filters.do) {
     const do_ = new Date(filters.do);
     do_.setHours(23, 59, 59, 999);
     if (zacetek > do_) return false;
   }
-  if (filters.voznik && z.fk_uporabnik !== parseInt(filters.voznik)) return false;
+  return true;
+}
+
+function filterPosadka(posadka, filterVal) {
+  if (filterVal === "da" && !posadka) return false;
+  if (filterVal === "ne" && posadka) return false;
+  return true;
+}
+
+function filterZapis(z, filters) {
+  const zacetek = new Date(z.zacetek);
+  if (!filterDatum(zacetek, filters)) return false;
+  if (filters.voznik && z.fk_uporabnik !== Number.parseInt(filters.voznik)) return false;
   if (filters.stanja.length > 0 && !filters.stanja.includes(z.stanje)) return false;
   if (filters.vir && z.vir !== filters.vir) return false;
-  if (filters.posadka === "da" && !z.posadka) return false;
-  if (filters.posadka === "ne" && z.posadka) return false;
+  if (!filterPosadka(z.posadka, filters.posadka)) return false;
   if (filters.registrska && z.registrska !== filters.registrska) return false;
   return true;
 }

@@ -4,7 +4,6 @@ import api from '../api/client';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
 const DRIVER_COLORS = [
   { bg: 'bg-blue-500',    light: 'bg-blue-50 border-blue-200',   text: 'text-blue-700',   dot: '#3b82f6' },
   { bg: 'bg-emerald-500', light: 'bg-emerald-50 border-emerald-200', text: 'text-emerald-700', dot: '#10b981' },
@@ -93,7 +92,6 @@ function EventDetailModal({ events, driverColorMap, onClose }) {
             <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
-
         <div className="overflow-y-auto divide-y divide-slate-100">
           {events.map((ev, i) => {
             const color = driverColorMap[ev.fk_uporabnik] ?? DRIVER_COLORS[0];
@@ -144,11 +142,11 @@ function EventDetailModal({ events, driverColorMap, onClose }) {
 
 // ─── Calendar ─────────────────────────────────────────────────────────────────
 function DriversCalendar({ urnik, vozniki }) {
-  const today                                       = new Date();
-  const [viewYear, setViewYear]                     = useState(today.getFullYear());
-  const [viewMonth, setViewMonth]                   = useState(today.getMonth());
-  const [selectedDayEvents, setSelectedDayEvents]   = useState(null);
-  const [filterDriver, setFilterDriver]             = useState('vse');
+  const today                                     = new Date();
+  const [viewYear, setViewYear]                   = useState(today.getFullYear());
+  const [viewMonth, setViewMonth]                 = useState(today.getMonth());
+  const [selectedDayEvents, setSelectedDayEvents] = useState(null);
+  const [filterDriver, setFilterDriver]           = useState('vse');
 
   const driverColorMap = useMemo(() => {
     const map = {};
@@ -168,11 +166,11 @@ function DriversCalendar({ urnik, vozniki }) {
   }, [urnik, filterDriver]);
 
   const calendarDays = useMemo(() => {
-    const firstDay   = new Date(viewYear, viewMonth, 1);
-    let startOffset  = firstDay.getDay() - 1;
+    const firstDay    = new Date(viewYear, viewMonth, 1);
+    let startOffset   = firstDay.getDay() - 1;
     if (startOffset < 0) startOffset = 6;
     const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
-    const cells      = [];
+    const cells       = [];
     for (let i = 0; i < startOffset; i++) cells.push(null);
     for (let d = 1; d <= daysInMonth; d++) cells.push(d);
     return cells;
@@ -254,18 +252,15 @@ function DriversCalendar({ urnik, vozniki }) {
         <div className="grid grid-cols-7">
           {calendarDays.map((day, idx) => {
             if (!day) return <div key={`empty-${idx}`} className="min-h-[90px] border-b border-r border-slate-100 bg-slate-50/50" />;
-
             const key       = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
             const dayEvents = eventsByDate[key] ?? [];
             const isToday   = key === todayKey;
             const isWeekend = (idx % 7) >= 5;
-
             const driverGroups = {};
             dayEvents.forEach((ev) => {
               if (!driverGroups[ev.fk_uporabnik]) driverGroups[ev.fk_uporabnik] = [];
               driverGroups[ev.fk_uporabnik].push(ev);
             });
-
             return (
               <div key={key} onClick={() => handleDayClick(day)}
                 className={`min-h-[90px] border-b border-r border-slate-100 p-1.5 flex flex-col gap-1 transition-colors ${dayEvents.length > 0 ? 'cursor-pointer hover:bg-blue-50/40' : ''} ${isWeekend ? 'bg-slate-50/60' : 'bg-white'}`}>
@@ -299,7 +294,7 @@ function DriversCalendar({ urnik, vozniki }) {
   );
 }
 
-// ─── Main Page ────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 const ITEMS_PER_PAGE = 4;
 const RIDES_PER_PAGE = 5;
 
@@ -308,19 +303,16 @@ function useDateFormat() {
     if (!value) return '-';
     return new Date(value).toLocaleDateString('sl-SI', { day: '2-digit', month: '2-digit', year: 'numeric' });
   };
-
   const formatDateCompact = (value) => {
     if (!value) return '-';
     const date = new Date(value);
     if (Number.isNaN(date.getTime())) return '-';
     return `${String(date.getDate()).padStart(2, '0')}.${String(date.getMonth() + 1).padStart(2, '0')}.${date.getFullYear()}`;
   };
-
   const formatTime = (value) => {
     if (!value) return '-';
     return new Date(value).toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit', hour12: false });
   };
-
   return { formatDate, formatDateCompact, formatTime };
 }
 
@@ -369,23 +361,108 @@ async function generatePDFDoc(selectedDriver, pdfTemplateRef, setPdfLoading, set
   }
 }
 
+// ─── Sub-komponente za main view ──────────────────────────────────────────────
+function VoznikiTabela({ paginatedVozniki, handleOpenDriverReport }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[760px] border-collapse">
+        <thead className="bg-slate-100">
+          <tr className="text-left text-sm font-semibold tracking-wide text-slate-600 uppercase">
+            <th className="px-5 py-4">Voznik</th>
+            <th className="px-4 py-4">ID št.</th>
+            <th className="px-4 py-4">E-pošta</th>
+            <th className="px-4 py-4">Status</th>
+            <th className="px-5 py-4 text-right">Akcije</th>
+          </tr>
+        </thead>
+        <tbody>
+          {paginatedVozniki.map((voznik) => (
+            <tr key={voznik.id_uporabnik} className="border-t border-slate-200 hover:bg-slate-50/80">
+              <td className="px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined rounded-lg bg-blue-50 p-2 text-blue-600">person</span>
+                  <p className="font-medium text-slate-900">{voznik.ime} {voznik.priimek}</p>
+                </div>
+              </td>
+              <td className="px-4 py-4 text-slate-700">{voznik.id_uporabnik}</td>
+              <td className="px-4 py-4 text-slate-700">{voznik.email}</td>
+              <td className="px-4 py-4">
+                <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold tracking-wide ${voznik.dostop === 2 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'}`}>
+                  {getStatusLabel(voznik.dostop)}
+                </span>
+              </td>
+              <td className="px-5 py-4 text-right">
+                <button type="button" onClick={() => handleOpenDriverReport(voznik)}
+                  className="inline-flex items-center rounded-md p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                  aria-label={`Odpri poročilo voženj za ${voznik.ime} ${voznik.priimek}`}>
+                  <span className="material-symbols-outlined text-[20px]">edit</span>
+                </button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function RideTabela({ paginatedRides, formatDate, formatTime, calculateDur }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full min-w-[820px] border-collapse">
+        <thead className="bg-slate-100">
+          <tr className="text-left text-sm font-semibold uppercase tracking-wide text-slate-600">
+            <th className="px-5 py-4">Datum in čas</th>
+            <th className="px-4 py-4">Trajanje</th>
+            <th className="px-4 py-4">Stranka</th>
+            <th className="px-4 py-4">Opis aktivnosti</th>
+          </tr>
+        </thead>
+        <tbody>
+          {paginatedRides.map((ride) => (
+            <tr key={ride.id_voznja} className="border-t border-slate-200 hover:bg-slate-50">
+              <td className="px-5 py-4">
+                <div className="flex items-center gap-3">
+                  <span className="material-symbols-outlined rounded-lg bg-blue-50 p-2 text-blue-600">local_shipping</span>
+                  <div>
+                    <p className="font-medium text-slate-900">{formatDate(ride.datum || ride.zacetek)}</p>
+                    <p className="text-sm text-slate-500">{formatTime(ride.zacetek)} - {formatTime(ride.konc)}</p>
+                  </div>
+                </div>
+              </td>
+              <td className="px-4 py-4">
+                <span className="inline-flex rounded-md bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
+                  {calculateDur(ride.zacetek, ride.konc)}
+                </span>
+              </td>
+              <td className="px-4 py-4 text-slate-700">{ride.stranka || '-'}</td>
+              <td className="px-4 py-4 text-slate-700">{ride.opis || '-'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+// ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Vozniki() {
-  const [vozniki, setVozniki]             = useState([]);
-  const [loading, setLoading]             = useState(true);
-  const [error, setError]                 = useState(null);
-  const [currentPage, setCurrentPage]     = useState(1);
-  const [urnik, setUrnik]                 = useState([]);
-  const [urnikLoading, setUrnikLoading]   = useState(false);
+  const [vozniki, setVozniki]               = useState([]);
+  const [loading, setLoading]               = useState(true);
+  const [error, setError]                   = useState(null);
+  const [currentPage, setCurrentPage]       = useState(1);
+  const [urnik, setUrnik]                   = useState([]);
+  const [urnikLoading, setUrnikLoading]     = useState(false);
   const [selectedDriver, setSelectedDriver] = useState(null);
-  const [dateFrom, setDateFrom]           = useState('');
-  const [dateTo, setDateTo]               = useState('');
-  const [rides, setRides]                 = useState([]);
-  const [ridesLoading, setRidesLoading]   = useState(false);
-  const [ridesError, setRidesError]       = useState(null);
-  const [ridesPage, setRidesPage]         = useState(1);
-  const [pdfLoading, setPdfLoading]       = useState(false);
-  const reportRef                         = useRef(null);
-  const pdfTemplateRef                    = useRef(null);
+  const [dateFrom, setDateFrom]             = useState('');
+  const [dateTo, setDateTo]                 = useState('');
+  const [rides, setRides]                   = useState([]);
+  const [ridesLoading, setRidesLoading]     = useState(false);
+  const [ridesError, setRidesError]         = useState(null);
+  const [ridesPage, setRidesPage]           = useState(1);
+  const [pdfLoading, setPdfLoading]         = useState(false);
+  const reportRef                           = useRef(null);
+  const pdfTemplateRef                      = useRef(null);
 
   const { formatDate, formatDateCompact, formatTime } = useDateFormat();
 
@@ -479,24 +556,16 @@ export default function Vozniki() {
     [...rides].sort((a, b) => new Date(b.datum || b.zacetek) - new Date(a.datum || a.zacetek)),
     [rides]);
 
-  const generatePDF = () =>
-  generatePDFDoc(selectedDriver, pdfTemplateRef, setPdfLoading, setRidesError);
+  const generatePDF = () => generatePDFDoc(selectedDriver, pdfTemplateRef, setPdfLoading, setRidesError);
 
-  const totalPages      = Math.max(1, Math.ceil(vozniki.length / ITEMS_PER_PAGE));
-  const paginatedVozniki = useMemo(() => {
-    const start = (currentPage - 1) * ITEMS_PER_PAGE;
-    return vozniki.slice(start, start + ITEMS_PER_PAGE);
-  }, [vozniki, currentPage]);
-
+  const totalPages       = Math.max(1, Math.ceil(vozniki.length / ITEMS_PER_PAGE));
+  const paginatedVozniki = useMemo(() => { const s = (currentPage - 1) * ITEMS_PER_PAGE; return vozniki.slice(s, s + ITEMS_PER_PAGE); }, [vozniki, currentPage]);
   const startRow         = vozniki.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
   const endRow           = Math.min(currentPage * ITEMS_PER_PAGE, vozniki.length);
   const ridesTotalPages  = Math.max(1, Math.ceil(rides.length / RIDES_PER_PAGE));
   const ridesStartRow    = rides.length === 0 ? 0 : (ridesPage - 1) * RIDES_PER_PAGE + 1;
   const ridesEndRow      = Math.min(ridesPage * RIDES_PER_PAGE, rides.length);
-  const paginatedRides   = useMemo(() => {
-    const start = (ridesPage - 1) * RIDES_PER_PAGE;
-    return rides.slice(start, start + RIDES_PER_PAGE);
-  }, [rides, ridesPage]);
+  const paginatedRides   = useMemo(() => { const s = (ridesPage - 1) * RIDES_PER_PAGE; return rides.slice(s, s + RIDES_PER_PAGE); }, [rides, ridesPage]);
 
   if (selectedDriver) {
     return (
@@ -562,46 +631,15 @@ export default function Vozniki() {
               <h2 className="text-sm font-semibold uppercase tracking-wide text-slate-600">Seznam opravljenih voženj</h2>
               <span className="rounded-full bg-slate-200 px-3 py-1 text-xs font-medium text-slate-700">Skupaj voženj: {rides.length}</span>
             </div>
-            {ridesLoading ? (
+            {ridesLoading && (
               <div className="px-5 py-10 text-center text-slate-500">Nalaganje voženj...</div>
-            ) : rides.length === 0 ? (
+            )}
+            {!ridesLoading && rides.length === 0 && (
               <div className="px-5 py-10 text-center text-slate-500">Ni voženj za izbrano obdobje</div>
-            ) : (
+            )}
+            {!ridesLoading && rides.length > 0 && (
               <>
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[820px] border-collapse">
-                    <thead className="bg-slate-100">
-                      <tr className="text-left text-sm font-semibold uppercase tracking-wide text-slate-600">
-                        <th className="px-5 py-4">Datum in čas</th>
-                        <th className="px-4 py-4">Trajanje</th>
-                        <th className="px-4 py-4">Stranka</th>
-                        <th className="px-4 py-4">Opis aktivnosti</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {paginatedRides.map((ride) => (
-                        <tr key={ride.id_voznja} className="border-t border-slate-200 hover:bg-slate-50">
-                          <td className="px-5 py-4">
-                            <div className="flex items-center gap-3">
-                              <span className="material-symbols-outlined rounded-lg bg-blue-50 p-2 text-blue-600">local_shipping</span>
-                              <div>
-                                <p className="font-medium text-slate-900">{formatDate(ride.datum || ride.zacetek)}</p>
-                                <p className="text-sm text-slate-500">{formatTime(ride.zacetek)} - {formatTime(ride.konc)}</p>
-                              </div>
-                            </div>
-                          </td>
-                          <td className="px-4 py-4">
-                            <span className="inline-flex rounded-md bg-emerald-100 px-2 py-1 text-xs font-semibold text-emerald-700">
-                              {calculateDuration(ride.zacetek, ride.konc)}
-                            </span>
-                          </td>
-                          <td className="px-4 py-4 text-slate-700">{ride.stranka || '-'}</td>
-                          <td className="px-4 py-4 text-slate-700">{ride.opis || '-'}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <RideTabela paginatedRides={paginatedRides} formatDate={formatDate} formatTime={formatTime} calculateDur={calculateDuration} />
                 <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
                   <p>Prikazano {ridesStartRow}-{ridesEndRow} od {rides.length} rezultatov</p>
                   <div className="flex items-center gap-2 self-end sm:self-auto">
@@ -712,51 +750,15 @@ export default function Vozniki() {
           </article>
         </section>
 
-        {loading && !vozniki.length ? (
+        {loading && !vozniki.length && (
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-slate-500 shadow-sm">Nalaganje voznikov...</div>
-        ) : vozniki.length === 0 ? (
+        )}
+        {!loading && vozniki.length === 0 && (
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-slate-500 shadow-sm">Ni registriranih voznikov</div>
-        ) : (
+        )}
+        {vozniki.length > 0 && (
           <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm mb-6">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] border-collapse">
-                <thead className="bg-slate-100">
-                  <tr className="text-left text-sm font-semibold tracking-wide text-slate-600 uppercase">
-                    <th className="px-5 py-4">Voznik</th>
-                    <th className="px-4 py-4">ID št.</th>
-                    <th className="px-4 py-4">E-pošta</th>
-                    <th className="px-4 py-4">Status</th>
-                    <th className="px-5 py-4 text-right">Akcije</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {paginatedVozniki.map((voznik) => (
-                    <tr key={voznik.id_uporabnik} className="border-t border-slate-200 hover:bg-slate-50/80">
-                      <td className="px-5 py-4">
-                        <div className="flex items-center gap-3">
-                          <span className="material-symbols-outlined rounded-lg bg-blue-50 p-2 text-blue-600">person</span>
-                          <p className="font-medium text-slate-900">{voznik.ime} {voznik.priimek}</p>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-slate-700">{voznik.id_uporabnik}</td>
-                      <td className="px-4 py-4 text-slate-700">{voznik.email}</td>
-                      <td className="px-4 py-4">
-                        <span className={`inline-flex rounded-full px-3 py-1 text-[11px] font-semibold tracking-wide ${voznik.dostop === 2 ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-700'}`}>
-                          {getStatusLabel(voznik.dostop)}
-                        </span>
-                      </td>
-                      <td className="px-5 py-4 text-right">
-                        <button type="button" onClick={() => handleOpenDriverReport(voznik)}
-                          className="inline-flex items-center rounded-md p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                          aria-label={`Odpri poročilo voženj za ${voznik.ime} ${voznik.priimek}`}>
-                          <span className="material-symbols-outlined text-[20px]">edit</span>
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <VoznikiTabela paginatedVozniki={paginatedVozniki} handleOpenDriverReport={handleOpenDriverReport} />
             <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
               <p>Prikazano {startRow}-{endRow} od {vozniki.length} voznikov</p>
               <div className="flex items-center gap-2 self-end sm:self-auto">
