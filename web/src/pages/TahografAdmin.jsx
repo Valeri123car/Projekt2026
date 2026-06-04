@@ -37,10 +37,28 @@ function formatTrajanje(min) {
   return `${h}h ${m}min`;
 }
 
+// ── Filter funkcija izvlečena iz .filter callback ─────────────────────────────
+function filterZapis(z, filters) {
+  const zacetek = new Date(z.zacetek);
+  if (filters.od && zacetek < new Date(filters.od)) return false;
+  if (filters.do) {
+    const do_ = new Date(filters.do);
+    do_.setHours(23, 59, 59, 999);
+    if (zacetek > do_) return false;
+  }
+  if (filters.voznik && z.fk_uporabnik !== parseInt(filters.voznik)) return false;
+  if (filters.stanja.length > 0 && !filters.stanja.includes(z.stanje)) return false;
+  if (filters.vir && z.vir !== filters.vir) return false;
+  if (filters.posadka === "da" && !z.posadka) return false;
+  if (filters.posadka === "ne" && z.posadka) return false;
+  if (filters.registrska && z.registrska !== filters.registrska) return false;
+  return true;
+}
+
 function MesecniPregled({ zapisi }) {
   const [selectedVoznik, setSelectedVoznik] = useState("");
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [grafNacin, setGrafNacin] = useState("aktivno");
+  const [selectedMonth, setSelectedMonth]   = useState(new Date().toISOString().slice(0, 7));
+  const [grafNacin, setGrafNacin]           = useState("aktivno");
 
   const uniqueVozniki = Array.from(
     new Map(zapisi.map((z) => [z.fk_uporabnik, z.uporabnik])).entries()
@@ -50,47 +68,41 @@ function MesecniPregled({ zapisi }) {
   const izracunajDnevneUre = () => {
     if (!selectedVoznik) return [];
     const [year, month] = selectedMonth.split("-").map(Number);
-    const daysInMonth = new Date(year, month, 0).getDate();
-    const dnevno = {};
+    const daysInMonth   = new Date(year, month, 0).getDate();
+    const dnevno        = {};
     for (let i = 1; i <= daysInMonth; i++) {
       dnevno[i] = { VOZNJA: 0, DELO: 0, ODMOR: 0, POCITEK: 0, RAZPOLOZLJIVOST: 0, DRUGO: 0, NEZNANO: 0 };
     }
-
     zapisi.forEach((z) => {
       if (z.fk_uporabnik !== parseInt(selectedVoznik)) return;
       if (!z.konec) return;
-
       const trajMin = z.trajanje_min || Math.round((new Date(z.konec) - new Date(z.zacetek)) / 60000);
       if (!trajMin) return;
-
       const d = new Date(z.zacetek);
       if (d.getFullYear() !== year || d.getMonth() + 1 !== month) return;
-      const dan = d.getDate();
+      const dan    = d.getDate();
       const stanje = z.stanje in dnevno[dan] ? z.stanje : "DRUGO";
       if (dnevno[dan]) dnevno[dan][stanje] += trajMin;
     });
-
     return Object.entries(dnevno).map(([dan, s]) => ({
-      dan: parseInt(dan),
-      voznja: Math.round(s.VOZNJA / 60 * 100) / 100,
-      delo: Math.round(s.DELO / 60 * 100) / 100,
-      odmor: Math.round(s.ODMOR / 60 * 100) / 100,
-      pocitek: Math.round(s.POCITEK / 60 * 100) / 100,
+      dan:             parseInt(dan),
+      voznja:          Math.round(s.VOZNJA / 60 * 100) / 100,
+      delo:            Math.round(s.DELO / 60 * 100) / 100,
+      odmor:           Math.round(s.ODMOR / 60 * 100) / 100,
+      pocitek:         Math.round(s.POCITEK / 60 * 100) / 100,
       razpolozljivost: Math.round(s.RAZPOLOZLJIVOST / 60 * 100) / 100,
     }));
   };
 
-  const podatki = izracunajDnevneUre();
-
+  const podatki   = izracunajDnevneUre();
   const maxAktivno = Math.max(2, ...podatki.map((d) => d.voznja + d.delo));
-  const maxVse = Math.max(12, ...podatki.map((d) => d.voznja + d.delo + d.odmor + d.pocitek + d.razpolozljivost));
+  const maxVse     = Math.max(12, ...podatki.map((d) => d.voznja + d.delo + d.odmor + d.pocitek + d.razpolozljivost));
 
   const renderGraf = (maxUre, getSkupaj, barovi) => (
     <svg className="w-full h-72" viewBox="0 0 1200 320" preserveAspectRatio="xMidYMid meet">
       <rect width="1200" height="320" fill="white" />
       <line x1="60" y1="20" x2="60" y2="260" stroke="#e5e7eb" strokeWidth="1" />
       <line x1="60" y1="260" x2="1180" y2="260" stroke="#e5e7eb" strokeWidth="1" />
-
       {grafNacin === "aktivno" && (() => {
         const y8 = 260 - (8 / maxUre) * 240;
         if (y8 < 20) return null;
@@ -101,9 +113,8 @@ function MesecniPregled({ zapisi }) {
           </>
         );
       })()}
-
       {(() => {
-        const step = maxUre <= 4 ? 1 : maxUre <= 12 ? 2 : maxUre <= 24 ? 4 : 8;
+        const step   = maxUre <= 4 ? 1 : maxUre <= 12 ? 2 : maxUre <= 24 ? 4 : 8;
         const labels = [];
         for (let i = 0; i <= maxUre; i += step) labels.push(i);
         return labels.map((label) => {
@@ -116,14 +127,12 @@ function MesecniPregled({ zapisi }) {
           );
         });
       })()}
-
       {podatki.map((d, i) => {
-        const barWidth = (1120 / podatki.length) * 0.7;
+        const barWidth   = (1120 / podatki.length) * 0.7;
         const barSpacing = 1120 / podatki.length;
-        const x = 60 + i * barSpacing + (barSpacing - barWidth) / 2;
-        const skupaj = getSkupaj(d);
-        let yPos = 260;
-
+        const x          = 60 + i * barSpacing + (barSpacing - barWidth) / 2;
+        const skupaj     = getSkupaj(d);
+        let yPos         = 260;
         return (
           <g key={d.dan}>
             {barovi.map(({ kljuc, barva }) => {
@@ -146,16 +155,13 @@ function MesecniPregled({ zapisi }) {
   return (
     <div className="mt-12 p-6 bg-gray-50 rounded-lg border border-gray-200">
       <h2 className="text-2xl font-bold text-gray-900 mb-6">Mesečni pregled ur</h2>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Voznik</label>
           <select value={selectedVoznik} onChange={(e) => setSelectedVoznik(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
             <option value="">Izberi voznika...</option>
-            {uniqueVozniki.map((v) => (
-              <option key={v.id} value={v.id}>{v.ime} {v.priimek}</option>
-            ))}
+            {uniqueVozniki.map((v) => <option key={v.id} value={v.id}>{v.ime} {v.priimek}</option>)}
           </select>
         </div>
         <div>
@@ -177,24 +183,19 @@ function MesecniPregled({ zapisi }) {
           </div>
         </div>
       </div>
-
       {selectedVoznik ? (
         <div className="bg-white p-6 rounded-lg border border-gray-200">
           {grafNacin === "aktivno" ? (
             <>
               <p className="text-sm text-gray-500 mb-4">Dnevne ure vožnje in dela — brez počitka in odmora</p>
-              {renderGraf(
-                maxAktivno,
-                (d) => d.voznja + d.delo,
-                [
-                  { kljuc: "delo", barva: "#6b21a8" },
-                  { kljuc: "voznja", barva: "#1d4ed8" },
-                ]
-              )}
+              {renderGraf(maxAktivno, (d) => d.voznja + d.delo, [
+                { kljuc: "delo",   barva: "#6b21a8" },
+                { kljuc: "voznja", barva: "#1d4ed8" },
+              ])}
               <div className="flex gap-6 mt-4 flex-wrap text-sm">
                 {[{ barva: "#1d4ed8", label: "Vožnja" }, { barva: "#6b21a8", label: "Delo" }].map((item) => (
                   <div key={item.label} className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.barva }}></div>
+                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.barva }} />
                     <span className="text-gray-600">{item.label}</span>
                   </div>
                 ))}
@@ -204,17 +205,13 @@ function MesecniPregled({ zapisi }) {
           ) : (
             <>
               <p className="text-sm text-gray-500 mb-4">Razporeditev vseh stanj po dnevih</p>
-              {renderGraf(
-                maxVse,
-                (d) => d.voznja + d.delo + d.odmor + d.pocitek + d.razpolozljivost,
-                [
-                  { kljuc: "pocitek", barva: "#166534" },
-                  { kljuc: "odmor", barva: "#92400e" },
-                  { kljuc: "razpolozljivost", barva: "#c2410c" },
-                  { kljuc: "delo", barva: "#6b21a8" },
-                  { kljuc: "voznja", barva: "#1d4ed8" },
-                ]
-              )}
+              {renderGraf(maxVse, (d) => d.voznja + d.delo + d.odmor + d.pocitek + d.razpolozljivost, [
+                { kljuc: "pocitek",         barva: "#166534" },
+                { kljuc: "odmor",           barva: "#92400e" },
+                { kljuc: "razpolozljivost", barva: "#c2410c" },
+                { kljuc: "delo",            barva: "#6b21a8" },
+                { kljuc: "voznja",          barva: "#1d4ed8" },
+              ])}
               <div className="flex gap-6 mt-4 flex-wrap text-sm">
                 {[
                   { barva: "#1d4ed8", label: "Vožnja" },
@@ -224,7 +221,7 @@ function MesecniPregled({ zapisi }) {
                   { barva: "#166534", label: "Počitek" },
                 ].map((item) => (
                   <div key={item.label} className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.barva }}></div>
+                    <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: item.barva }} />
                     <span className="text-gray-600">{item.label}</span>
                   </div>
                 ))}
@@ -244,13 +241,13 @@ const EMPTY_FILTERS = {
 };
 
 export default function TahografAdmin() {
-  const [zapisi, setZapisi] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  const [zapisi, setZapisi]         = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [error, setError]           = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [filters, setFilters] = useState(EMPTY_FILTERS);
-  const [sortField, setSortField] = useState("zacetek");
-  const [sortDir, setSortDir] = useState("desc");
+  const [filters, setFilters]       = useState(EMPTY_FILTERS);
+  const [sortField, setSortField]   = useState("zacetek");
+  const [sortDir, setSortDir]       = useState("desc");
 
   useEffect(() => { fetchZapisi(); }, []);
 
@@ -272,7 +269,8 @@ export default function TahografAdmin() {
   ).map(([id, u]) => ({ id, ime: u?.ime || "", priimek: u?.priimek || "" }))
     .sort((a, b) => (a.priimek + a.ime).localeCompare(b.priimek + b.ime));
 
-  const uniqueRegistrske = [...new Set(zapisi.map((z) => z.registrska).filter(Boolean))].sort();
+  const uniqueRegistrske = [...new Set(zapisi.map((z) => z.registrska).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b));
 
   const setFilter = (key, val) => {
     setFilters((f) => ({ ...f, [key]: val }));
@@ -295,45 +293,30 @@ export default function TahografAdmin() {
     setCurrentPage(1);
   };
 
+  const getSortValues = (a, b) => {
+    if (sortField === "zacetek" || sortField === "konec") {
+      return [new Date(a[sortField] || 0), new Date(b[sortField] || 0)];
+    }
+    if (sortField === "trajanje_min") return [a.trajanje_min ?? -1, b.trajanje_min ?? -1];
+    if (sortField === "voznik") {
+      const av = a.uporabnik ? `${a.uporabnik.priimek} ${a.uporabnik.ime}` : "";
+      const bv = b.uporabnik ? `${b.uporabnik.priimek} ${b.uporabnik.ime}` : "";
+      return [av, bv];
+    }
+    return [a[sortField] ?? "", b[sortField] ?? ""];
+  };
+
   const filtered = zapisi
-    .filter((z) => {
-      if (filters.od && new Date(z.zacetek) < new Date(filters.od)) return false;
-      if (filters.do) {
-        const do_ = new Date(filters.do);
-        do_.setHours(23, 59, 59, 999);
-        if (new Date(z.zacetek) > do_) return false;
-      }
-      if (filters.voznik && z.fk_uporabnik !== parseInt(filters.voznik)) return false;
-      if (filters.stanja.length > 0 && !filters.stanja.includes(z.stanje)) return false;
-      if (filters.vir && z.vir !== filters.vir) return false;
-      if (filters.posadka === "da" && !z.posadka) return false;
-      if (filters.posadka === "ne" && z.posadka) return false;
-      if (filters.registrska && z.registrska !== filters.registrska) return false;
-      return true;
-    })
+    .filter((z) => filterZapis(z, filters))
     .sort((a, b) => {
-      let av, bv;
-      if (sortField === "zacetek" || sortField === "konec") {
-        av = new Date(a[sortField] || 0);
-        bv = new Date(b[sortField] || 0);
-      } else if (sortField === "trajanje_min") {
-        av = a.trajanje_min ?? -1;
-        bv = b.trajanje_min ?? -1;
-      } else if (sortField === "voznik") {
-        av = a.uporabnik ? `${a.uporabnik.priimek} ${a.uporabnik.ime}` : "";
-        bv = b.uporabnik ? `${b.uporabnik.priimek} ${b.uporabnik.ime}` : "";
-      } else {
-        av = a[sortField] ?? "";
-        bv = b[sortField] ?? "";
-      }
+      const [av, bv] = getSortValues(a, b);
       if (av < bv) return sortDir === "asc" ? -1 : 1;
       if (av > bv) return sortDir === "asc" ? 1 : -1;
       return 0;
     });
 
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
-  const paged = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
-
+  const totalPages       = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
+  const paged            = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
   const hasActiveFilters = JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS);
 
   const SortIcon = ({ field }) => {
@@ -343,7 +326,6 @@ export default function TahografAdmin() {
 
   return (
     <>
-      {/* ── Filter panel ── */}
       <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Filtri</h2>
@@ -355,7 +337,6 @@ export default function TahografAdmin() {
             </button>
           )}
         </div>
-
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Od datuma</label>
@@ -372,9 +353,7 @@ export default function TahografAdmin() {
             <select value={filters.voznik} onChange={(e) => setFilter("voznik", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
               <option value="">Vsi vozniki</option>
-              {uniqueVozniki.map((v) => (
-                <option key={v.id} value={v.id}>{v.ime} {v.priimek}</option>
-              ))}
+              {uniqueVozniki.map((v) => <option key={v.id} value={v.id}>{v.ime} {v.priimek}</option>)}
             </select>
           </div>
           <div>
@@ -386,7 +365,6 @@ export default function TahografAdmin() {
             </select>
           </div>
         </div>
-
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Vir</label>
@@ -407,8 +385,6 @@ export default function TahografAdmin() {
             </select>
           </div>
         </div>
-
-        {/* Stanje pills */}
         <div>
           <label className="block text-xs font-medium text-gray-600 mb-2">Stanje</label>
           <div className="flex flex-wrap gap-2">
@@ -429,7 +405,6 @@ export default function TahografAdmin() {
         </div>
       </div>
 
-      {/* ── Pagination top ── */}
       <div className="flex items-center justify-between text-sm text-gray-600 mb-3">
         <span>
           Prikazano: <strong>{filtered.length === 0 ? 0 : Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filtered.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)}</strong> od <strong>{filtered.length}</strong>
@@ -465,8 +440,7 @@ export default function TahografAdmin() {
                   { key: "posadka",      label: "Posadka" },
                   { key: "vir",          label: "Vir" },
                 ].map(({ key, label }) => (
-                  <th key={key}
-                    onClick={() => handleSort(key)}
+                  <th key={key} onClick={() => handleSort(key)}
                     className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide cursor-pointer hover:text-gray-900 select-none">
                     <span className="inline-flex items-center">{label}<SortIcon field={key} /></span>
                   </th>
@@ -497,6 +471,7 @@ export default function TahografAdmin() {
         </div>
       )}
 
+      <MesecniPregled zapisi={zapisi} />
     </>
   );
 }
