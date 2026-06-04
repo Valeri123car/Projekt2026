@@ -5,7 +5,7 @@ import os from "os";
 
 export default async function voznje(app) {
     const protectedOnly = async (request, reply) => {
-        if (request.user.vloga !== 2) {
+        if (request.user.vloga !== 2 && request.user.vloga !== 3) {
             return reply.code(403).send({ error: "Dostop zavrnjen" });
         }
     };
