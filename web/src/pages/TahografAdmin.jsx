@@ -239,12 +239,18 @@ function MesecniPregled({ zapisi }) {
   );
 }
 
+const EMPTY_FILTERS = {
+  od: "", do: "", voznik: "", stanja: [], vir: "", posadka: "", registrska: "",
+};
+
 export default function TahografAdmin() {
   const [zapisi, setZapisi] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
-  const [filters, setFilters] = useState({ od: "", do: "", voznik: "" });
+  const [filters, setFilters] = useState(EMPTY_FILTERS);
+  const [sortField, setSortField] = useState("zacetek");
+  const [sortDir, setSortDir] = useState("desc");
 
   useEffect(() => { fetchZapisi(); }, []);
 
@@ -266,62 +272,168 @@ export default function TahografAdmin() {
   ).map(([id, u]) => ({ id, ime: u?.ime || "", priimek: u?.priimek || "" }))
     .sort((a, b) => (a.priimek + a.ime).localeCompare(b.priimek + b.ime));
 
-  const filtered = zapisi.filter((z) => {
-    if (filters.od && new Date(z.zacetek) < new Date(filters.od)) return false;
-    if (filters.do) {
-      const do_ = new Date(filters.do);
-      do_.setHours(23, 59, 59, 999);
-      if (new Date(z.zacetek) > do_) return false;
-    }
-    if (filters.voznik && z.fk_uporabnik !== parseInt(filters.voznik)) return false;
-    return true;
-  });
-
-  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
-  const paged = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+  const uniqueRegistrske = [...new Set(zapisi.map((z) => z.registrska).filter(Boolean))].sort();
 
   const setFilter = (key, val) => {
     setFilters((f) => ({ ...f, [key]: val }));
     setCurrentPage(1);
   };
 
+  const toggleStanje = (stanje) => {
+    setFilters((f) => {
+      const next = f.stanja.includes(stanje)
+        ? f.stanja.filter((s) => s !== stanje)
+        : [...f.stanja, stanje];
+      return { ...f, stanja: next };
+    });
+    setCurrentPage(1);
+  };
+
+  const handleSort = (field) => {
+    if (sortField === field) setSortDir((d) => d === "asc" ? "desc" : "asc");
+    else { setSortField(field); setSortDir("asc"); }
+    setCurrentPage(1);
+  };
+
+  const filtered = zapisi
+    .filter((z) => {
+      if (filters.od && new Date(z.zacetek) < new Date(filters.od)) return false;
+      if (filters.do) {
+        const do_ = new Date(filters.do);
+        do_.setHours(23, 59, 59, 999);
+        if (new Date(z.zacetek) > do_) return false;
+      }
+      if (filters.voznik && z.fk_uporabnik !== parseInt(filters.voznik)) return false;
+      if (filters.stanja.length > 0 && !filters.stanja.includes(z.stanje)) return false;
+      if (filters.vir && z.vir !== filters.vir) return false;
+      if (filters.posadka === "da" && !z.posadka) return false;
+      if (filters.posadka === "ne" && z.posadka) return false;
+      if (filters.registrska && z.registrska !== filters.registrska) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      let av, bv;
+      if (sortField === "zacetek" || sortField === "konec") {
+        av = new Date(a[sortField] || 0);
+        bv = new Date(b[sortField] || 0);
+      } else if (sortField === "trajanje_min") {
+        av = a.trajanje_min ?? -1;
+        bv = b.trajanje_min ?? -1;
+      } else if (sortField === "voznik") {
+        av = a.uporabnik ? `${a.uporabnik.priimek} ${a.uporabnik.ime}` : "";
+        bv = b.uporabnik ? `${b.uporabnik.priimek} ${b.uporabnik.ime}` : "";
+      } else {
+        av = a[sortField] ?? "";
+        bv = b[sortField] ?? "";
+      }
+      if (av < bv) return sortDir === "asc" ? -1 : 1;
+      if (av > bv) return sortDir === "asc" ? 1 : -1;
+      return 0;
+    });
+
+  const totalPages = Math.ceil(filtered.length / ITEMS_PER_PAGE) || 1;
+  const paged = filtered.slice((currentPage - 1) * ITEMS_PER_PAGE, currentPage * ITEMS_PER_PAGE);
+
+  const hasActiveFilters = JSON.stringify(filters) !== JSON.stringify(EMPTY_FILTERS);
+
+  const SortIcon = ({ field }) => {
+    if (sortField !== field) return <span className="material-symbols-outlined text-[13px] text-gray-300 ml-1">unfold_more</span>;
+    return <span className="material-symbols-outlined text-[13px] text-blue-600 ml-1">{sortDir === "asc" ? "arrow_upward" : "arrow_downward"}</span>;
+  };
+
   return (
     <>
-      <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
-        <h2 className="text-base font-semibold text-gray-900 mb-3">Filtri</h2>
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      {/* ── Filter panel ── */}
+      <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Filtri</h2>
+          {hasActiveFilters && (
+            <button onClick={() => { setFilters(EMPTY_FILTERS); setCurrentPage(1); }}
+              className="inline-flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800">
+              <span className="material-symbols-outlined text-[14px]">close</span>
+              Počisti vse
+            </button>
+          )}
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Od datuma</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Od datuma</label>
             <input type="date" value={filters.od} onChange={(e) => setFilter("od", e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Do datuma</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Do datuma</label>
             <input type="date" value={filters.do} onChange={(e) => setFilter("do", e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white" />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-700 mb-1">Voznik</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Voznik</label>
             <select value={filters.voznik} onChange={(e) => setFilter("voznik", e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
               <option value="">Vsi vozniki</option>
               {uniqueVozniki.map((v) => (
                 <option key={v.id} value={v.id}>{v.ime} {v.priimek}</option>
               ))}
             </select>
           </div>
-          <div className="flex items-end">
-            <button onClick={() => { setFilters({ od: "", do: "", voznik: "" }); setCurrentPage(1); }}
-              className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
-              Počisti
-            </button>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Registrska</label>
+            <select value={filters.registrska} onChange={(e) => setFilter("registrska", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="">Vse</option>
+              {uniqueRegistrske.map((r) => <option key={r} value={r}>{r}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Vir</label>
+            <select value={filters.vir} onChange={(e) => setFilter("vir", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="">Vsi viri</option>
+              <option value="UVOZ">Uvoz (DDD/Excel)</option>
+              <option value="ROCNO">Ročno</option>
+            </select>
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Posadka</label>
+            <select value={filters.posadka} onChange={(e) => setFilter("posadka", e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+              <option value="">Vse</option>
+              <option value="da">Da</option>
+              <option value="ne">Ne</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Stanje pills */}
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-2">Stanje</label>
+          <div className="flex flex-wrap gap-2">
+            {Object.entries(STANJE_META).map(([key, meta]) => {
+              const active = filters.stanja.includes(key);
+              return (
+                <button key={key} type="button" onClick={() => toggleStanje(key)}
+                  className="px-3 py-1 rounded-full text-xs font-semibold border transition-all"
+                  style={active
+                    ? { backgroundColor: meta.barva, color: "#fff", borderColor: meta.barva }
+                    : { backgroundColor: meta.bg, color: meta.barva, borderColor: meta.barva + "60" }
+                  }>
+                  {meta.label}
+                </button>
+              );
+            })}
           </div>
         </div>
       </div>
 
-      <div className="flex items-center justify-between text-sm text-gray-600 mb-4">
+      {/* ── Pagination top ── */}
+      <div className="flex items-center justify-between text-sm text-gray-600 mb-3">
         <span>
-          Prikazano: <strong>{Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filtered.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)}</strong> od <strong>{filtered.length}</strong>
+          Prikazano: <strong>{filtered.length === 0 ? 0 : Math.min((currentPage - 1) * ITEMS_PER_PAGE + 1, filtered.length)}–{Math.min(currentPage * ITEMS_PER_PAGE, filtered.length)}</strong> od <strong>{filtered.length}</strong>
+          {filtered.length !== zapisi.length && <span className="ml-1 text-gray-400">(filtrirano iz {zapisi.length})</span>}
         </span>
         <div className="flex gap-2 items-center">
           <button onClick={() => setCurrentPage(Math.max(1, currentPage - 1))} disabled={currentPage === 1}
@@ -343,8 +455,21 @@ export default function TahografAdmin() {
           <table className="w-full text-sm bg-white">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                {["Voznik", "Stanje", "Začetek", "Konec", "Trajanje", "Registrska", "Posadka", "Vir"].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide">{h}</th>
+                {[
+                  { key: "voznik",       label: "Voznik" },
+                  { key: "stanje",       label: "Stanje" },
+                  { key: "zacetek",      label: "Začetek" },
+                  { key: "konec",        label: "Konec" },
+                  { key: "trajanje_min", label: "Trajanje" },
+                  { key: "registrska",   label: "Registrska" },
+                  { key: "posadka",      label: "Posadka" },
+                  { key: "vir",          label: "Vir" },
+                ].map(({ key, label }) => (
+                  <th key={key}
+                    onClick={() => handleSort(key)}
+                    className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide cursor-pointer hover:text-gray-900 select-none">
+                    <span className="inline-flex items-center">{label}<SortIcon field={key} /></span>
+                  </th>
                 ))}
               </tr>
             </thead>
@@ -372,7 +497,6 @@ export default function TahografAdmin() {
         </div>
       )}
 
-      <MesecniPregled zapisi={zapisi} />
     </>
   );
 }

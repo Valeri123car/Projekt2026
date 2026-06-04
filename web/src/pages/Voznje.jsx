@@ -146,24 +146,9 @@ export default function Voznje() {
     return date.toLocaleDateString("sl-SI") + " " + date.toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" });
   };
 
-  const izracunajVoznjePoMesecih = () => {
-    const meseci = {};
-    voznje.forEach((v) => {
-      const mesec = new Date(v.zacetek).toISOString().slice(0, 7);
-      if (!meseci[mesec]) meseci[mesec] = 0;
-      meseci[mesec]++;
-    });
-    return Object.entries(meseci)
-      .sort(([a], [b]) => a.localeCompare(b))
-      .slice(-12)
-      .map(([mesec, stevilo]) => ({
-        mesec,
-        label: new Date(mesec + "-01").toLocaleDateString("sl-SI", { month: "short", year: "2-digit" }),
-        stevilo,
-      }));
-  };
 
   const izracunajTrajanje = (zacetek, konec) => {
+
   if (!zacetek || !konec) return "-";
   const diff = Math.floor((new Date(konec) - new Date(zacetek)) / 60000);
   if (diff <= 0) return "-";
@@ -172,9 +157,6 @@ export default function Voznje() {
   if (h === 0) return `${m}min`;
   return `${h}h ${m}min`;
 };
-
-  const voznjePoMesecih = izracunajVoznjePoMesecih();
-  const maxVoznje = Math.max(1, ...voznjePoMesecih.map((m) => m.stevilo));
 
   return (
     <div className="flex">
@@ -332,45 +314,6 @@ export default function Voznje() {
               </div>
             )}
 
-            {voznjePoMesecih.length > 0 && (
-              <div className="mt-12 p-6 bg-gray-50 rounded-lg border border-gray-200">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Vožnje po mesecih</h2>
-                <p className="text-sm text-gray-500 mb-6">Število ročno vnesenih voženj v zadnjih 12 mesecih</p>
-                <div className="bg-white p-6 rounded-lg border border-gray-200">
-                  <svg className="w-full h-64" viewBox="0 0 1200 300" preserveAspectRatio="xMidYMid meet">
-                    <rect width="1200" height="300" fill="white" />
-                    <line x1="60" y1="20" x2="60" y2="240" stroke="#e5e7eb" strokeWidth="1" />
-                    <line x1="60" y1="240" x2="1180" y2="240" stroke="#e5e7eb" strokeWidth="1" />
-                    {[0, 0.25, 0.5, 0.75, 1].map((frac) => {
-                      const val = Math.round(maxVoznje * frac);
-                      const y = 240 - frac * 220;
-                      return (
-                        <g key={frac}>
-                          <line x1="60" y1={y} x2="1180" y2={y} stroke="#f3f4f6" strokeWidth="1" />
-                          <text x="52" y={y + 4} fontSize="11" fill="#9ca3af" textAnchor="end">{val}</text>
-                        </g>
-                      );
-                    })}
-                    {voznjePoMesecih.map((m, i) => {
-                      const barWidth = (1120 / voznjePoMesecih.length) * 0.6;
-                      const barSpacing = 1120 / voznjePoMesecih.length;
-                      const x = 60 + i * barSpacing + (barSpacing - barWidth) / 2;
-                      const barH = (m.stevilo / maxVoznje) * 220;
-                      const y = 240 - barH;
-                      return (
-                        <g key={m.mesec}>
-                          <rect x={x} y={y} width={barWidth} height={barH} fill="#2563eb" rx="4" opacity="0.85" />
-                          <text x={x + barWidth / 2} y="258" fontSize="11" fill="#6b7280" textAnchor="middle">{m.label}</text>
-                          {m.stevilo > 0 && (
-                            <text x={x + barWidth / 2} y={y - 5} fontSize="11" fill="#2563eb" textAnchor="middle" fontWeight="bold">{m.stevilo}</text>
-                          )}
-                        </g>
-                      );
-                    })}
-                  </svg>
-                </div>
-              </div>
-            )}
           </>
         )}
       </main>

@@ -265,6 +265,760 @@ function RoutesMap({ selectedRoute, loading }) {
   );
 }
 
+const LINE_COLORS = ['#2563eb','#f97316','#10b981','#8b5cf6','#ef4444','#f59e0b','#06b6d4','#ec4899'];
+
+// ─── Analytics constants ──────────────────────────────────────────────────────
+const STANJE_COLORS = {
+  VOZNJA:          '#1d4ed8',
+  DELO:            '#6b21a8',
+  POCITEK:         '#166534',
+  ODMOR:           '#92400e',
+  RAZPOLOZLJIVOST: '#c2410c',
+  DRUGO:           '#6b7280',
+  NEZNANO:         '#9ca3af',
+};
+const STANJE_LABELS = {
+  VOZNJA:'Vožnja', DELO:'Delo', POCITEK:'Počitek',
+  ODMOR:'Odmor', RAZPOLOZLJIVOST:'Razpoložljivost', DRUGO:'Drugo', NEZNANO:'Neznano',
+};
+const TEDEN = ['Pon','Tor','Sre','Čet','Pet','Sob','Ned'];
+const fmtH = (h) => `${h.toFixed(1)}h`;
+const fmtEur = (v) => new Intl.NumberFormat('sl-SI',{style:'currency',currency:'EUR'}).format(v ?? 0);
+
+// ─── DonutChart ───────────────────────────────────────────────────────────────
+function DonutChart({ segments, totalMin }) {
+  const r = 65, cx = 110, cy = 110;
+  const circ = 2 * Math.PI * r;
+  const totalM = totalMin || 1;
+  let cumFrac = 0;
+  return (
+    <svg viewBox="0 0 220 220" className="w-full h-full">
+      {segments.map((seg) => {
+        const frac = seg.mins / totalM;
+        const dash = frac * circ;
+        const rotation = -90 + cumFrac * 360;
+        cumFrac += frac;
+        return (
+          <circle key={seg.stanje} cx={cx} cy={cy} r={r}
+            fill="none" stroke={STANJE_COLORS[seg.stanje] || '#6b7280'}
+            strokeWidth="30" strokeDasharray={`${dash} ${circ - dash}`}
+            transform={`rotate(${rotation} ${cx} ${cy})`} />
+        );
+      })}
+      <circle cx={cx} cy={cy} r={50} fill="white" />
+      <text x={cx} y={cy - 6} textAnchor="middle" fontSize="16" fontWeight="bold" fill="#111827">
+        {fmtH(totalMin / 60)}
+      </text>
+      <text x={cx} y={cy + 12} textAnchor="middle" fontSize="11" fill="#9ca3af">skupaj</text>
+    </svg>
+  );
+}
+
+// ─── DriverHBar — stacked vožnja (blue) + delo (orange) ──────────────────────
+function DriverHBar({ name, voznja, delo, maxTotal }) {
+  const max = maxTotal || 1;
+  const vPct = (voznja / max) * 100;
+  const dPct = (delo / max) * 100;
+  const hasData = voznja > 0 || delo > 0;
+  return (
+    <div className="flex items-center gap-3 py-0.5">
+      <span className="text-xs text-gray-600 w-32 truncate shrink-0 text-right">{name}</span>
+      <div className="flex-1 h-6 bg-gray-100 rounded overflow-hidden flex">
+        {vPct > 0 && <div style={{ width: `${vPct}%` }} className="h-full bg-blue-500 shrink-0 transition-all" />}
+        {dPct > 0 && <div style={{ width: `${dPct}%` }} className="h-full bg-orange-400 shrink-0 transition-all" />}
+      </div>
+      {hasData
+        ? <div className="text-right shrink-0 w-28">
+            <span className="text-[11px] text-blue-600 font-semibold">{voznja}h</span>
+            <span className="text-gray-300 mx-1">|</span>
+            <span className="text-[11px] text-orange-500 font-semibold">{delo}h</span>
+          </div>
+        : <span className="text-[11px] text-gray-300 w-28 text-right shrink-0">—</span>}
+    </div>
+  );
+}
+
+// ─── HBar (simple single color, used for vehicles) ────────────────────────────
+function HBar({ label, value, max, color = '#0284c7', unit = 'h' }) {
+  const pct = max > 0 ? (value / max) * 100 : 0;
+  return (
+    <div className="flex items-center gap-3 py-0.5">
+      <span className="text-xs text-gray-600 w-32 truncate shrink-0 text-right">{label}</span>
+      <div className="flex-1 h-6 bg-gray-100 rounded overflow-hidden">
+        <div className="h-full rounded transition-all" style={{ width: `${pct}%`, backgroundColor: color }} />
+      </div>
+      <span className="text-xs font-semibold text-gray-700 w-14 text-right shrink-0">{value}{unit}</span>
+    </div>
+  );
+}
+
+// ─── VBar chart (vertical bars) ───────────────────────────────────────────────
+function VBarChart({ data, color = '#2563eb', color2, labelKey = 'label', valueKey = 'value', value2Key }) {
+  if (!data.length) return <div className="flex items-center justify-center h-full text-gray-400 text-sm">Ni podatkov.</div>;
+  const maxV = Math.max(1, ...data.map(d => d[valueKey] + (value2Key ? (d[value2Key] ?? 0) : 0)));
+  const W = 1000, H = 260, PAD_L = 10, PAD_B = 40, PAD_T = 20;
+  const gH = H - PAD_B - PAD_T;
+  const bW = Math.min(55, (W - PAD_L) / data.length - 6);
+  const spacing = (W - PAD_L) / data.length;
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+      <rect width={W} height={H} fill="white" />
+      {[0, 0.25, 0.5, 0.75, 1].map(f => {
+        const y = PAD_T + gH - f * gH;
+        const v = Math.round(maxV * f * 10) / 10;
+        return (
+          <g key={f}>
+            <line x1={PAD_L} y1={y} x2={W} y2={y} stroke="#f3f4f6" strokeWidth="1" />
+            <text x={PAD_L + 2} y={y - 3} fontSize="10" fill="#d1d5db">{v}</text>
+          </g>
+        );
+      })}
+      {data.map((d, i) => {
+        const x = PAD_L + i * spacing + (spacing - bW) / 2;
+        const h1 = (d[valueKey] / maxV) * gH;
+        const h2 = value2Key ? ((d[value2Key] ?? 0) / maxV) * gH : 0;
+        const y1 = PAD_T + gH - h1;
+        return (
+          <g key={d[labelKey]}>
+            {value2Key && h2 > 0 && (
+              <rect x={x} y={y1 - h2} width={bW} height={h2} fill={color2 || '#6b21a8'} rx="3" opacity="0.6" />
+            )}
+            {h1 > 0 && <rect x={x} y={y1} width={bW} height={h1} fill={color} rx="3" />}
+            {(h1 + h2) > 0 && (
+              <text x={x + bW / 2} y={y1 - h2 - 3} fontSize="10" fill="#374151" textAnchor="middle" fontWeight="bold">
+                {Math.round((d[valueKey] + (value2Key ? (d[value2Key] ?? 0) : 0)) * 10) / 10}
+              </text>
+            )}
+            <text x={x + bW / 2} y={H - PAD_B + 14} fontSize="10" fill="#6b7280" textAnchor="middle">{d[labelKey]}</text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+// ─── Line chart ───────────────────────────────────────────────────────────────
+function SimpleLineChart({ data, labelKey = 'label', valueKey = 'value', color = '#2563eb' }) {
+  if (!data.length) return null;
+  const maxV = Math.max(1, ...data.map(d => d[valueKey]));
+  const W = 1000, H = 220, PAD_L = 50, PAD_R = 10, PAD_T = 20, PAD_B = 30;
+  const gW = W - PAD_L - PAD_R, gH = H - PAD_T - PAD_B;
+  const xP = (i) => PAD_L + (i / (data.length - 1 || 1)) * gW;
+  const yP = (v) => PAD_T + gH - (v / maxV) * gH;
+  const pts = data.map((d, i) => `${xP(i)},${yP(d[valueKey])}`).join(' ');
+  const labels = data.filter((_, i) => i === 0 || i === data.length - 1 || i % Math.ceil(data.length / 8) === 0);
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+      <rect width={W} height={H} fill="white" />
+      {[0, 0.5, 1].map(f => {
+        const y = yP(maxV * f);
+        return (
+          <g key={f}>
+            <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="#f3f4f6" strokeWidth="1" />
+            <text x={PAD_L - 4} y={y + 4} fontSize="11" fill="#9ca3af" textAnchor="end">{Math.round(maxV * f * 10) / 10}</text>
+          </g>
+        );
+      })}
+      <line x1={PAD_L} y1={PAD_T + gH} x2={W - PAD_R} y2={PAD_T + gH} stroke="#e5e7eb" strokeWidth="1" />
+      <polyline points={pts} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+      {data.map((d, i) => d[valueKey] > 0 && (
+        <circle key={i} cx={xP(i)} cy={yP(d[valueKey])} r="3" fill={color} />
+      ))}
+      {labels.map((d, _) => {
+        const i = data.indexOf(d);
+        return <text key={i} x={xP(i)} y={H - PAD_B + 14} fontSize="10" fill="#9ca3af" textAnchor="middle">{d[labelKey]}</text>;
+      })}
+    </svg>
+  );
+}
+
+// ─── Analytics Tab ────────────────────────────────────────────────────────────
+function AnalyticsTab() {
+  const [period, setPeriod] = useState(() => new Date().toISOString().slice(0, 7));
+  const [tahData, setTahData] = useState([]);
+  const [urnikData, setUrnikData] = useState([]);
+  const [voznikiList, setVoznikiList] = useState([]);
+  const [voznjeAll, setVoznjeAll] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [selectedVoznikStanje, setSelectedVoznikStanje] = useState('');
+
+  useEffect(() => {
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [yr, mo] = period.split('-').map(Number);
+        const od = `${period}-01`;
+        const lastDay = new Date(yr, mo, 0).getDate();
+        const doDate = `${period}-${String(lastDay).padStart(2, '0')}`;
+        const [tahRes, urnikRes, voznikiRes, voznjeRes] = await Promise.all([
+          api.get(`/admin/tahograf?od=${od}&do=${doDate}`),
+          api.get('/admin/urnik'),
+          api.get('/admin/vozniki'),
+          api.get('/admin/voznje'),
+        ]);
+        setTahData(tahRes.data || []);
+        setUrnikData(urnikRes.data || []);
+        setVoznikiList(voznikiRes.data || []);
+        setVoznjeAll(voznjeRes.data || []);
+      } catch {
+        setTahData([]); setUrnikData([]); setVoznikiList([]); setVoznjeAll([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+    load();
+  }, [period]);
+
+  const [yr, mo] = period.split('-').map(Number);
+  const lastDay = new Date(yr, mo, 0).getDate();
+
+  const urnikMesec = useMemo(() =>
+    urnikData.filter(u => { const d = new Date(u.datum); return d.getFullYear() === yr && d.getMonth() + 1 === mo; }),
+    [urnikData, yr, mo]);
+
+  const kpi = useMemo(() => {
+    const voznjaMin = tahData.filter(z => z.stanje === 'VOZNJA').reduce((s, z) => s + (z.trajanje_min ?? 0), 0);
+    const deloMin   = tahData.filter(z => z.stanje === 'DELO').reduce((s, z) => s + (z.trajanje_min ?? 0), 0);
+    const pocitekMin = tahData.filter(z => z.stanje === 'POCITEK').reduce((s, z) => s + (z.trajanje_min ?? 0), 0);
+    const aktivniVozniki = new Set(tahData.map(z => z.fk_uporabnik)).size;
+    const aktivnaVozila = new Set(tahData.map(z => z.registrska).filter(Boolean)).size;
+    const skupnaVrednost = urnikMesec.filter(u => u.cena != null).reduce((s, u) => s + u.cena, 0);
+    const neplacano = urnikMesec.filter(u => !u.placano && u.cena != null).reduce((s, u) => s + u.cena, 0);
+    const stPrevozov = urnikMesec.length;
+    return { voznjaH: voznjaMin/60, deloH: deloMin/60, pocitekH: pocitekMin/60, aktivniVozniki, aktivnaVozila, skupnaVrednost, neplacano, stPrevozov };
+  }, [tahData, urnikMesec]);
+
+  const driverHours = useMemo(() => {
+    const map = {};
+    // seed all known vozniki with 0 so they always appear
+    voznikiList.forEach(v => {
+      const name = `${v.priimek} ${v.ime[0]}.`;
+      map[v.id_uporabnik] = { name, v: 0, d: 0 };
+    });
+    tahData.filter(z => z.stanje === 'VOZNJA' || z.stanje === 'DELO').forEach(z => {
+      const k = z.fk_uporabnik;
+      if (!map[k]) {
+        const name = z.uporabnik ? `${z.uporabnik.priimek} ${z.uporabnik.ime[0]}.` : `ID ${k}`;
+        map[k] = { name, v: 0, d: 0 };
+      }
+      if (z.stanje === 'VOZNJA') map[k].v += z.trajanje_min ?? 0;
+      else map[k].d += z.trajanje_min ?? 0;
+    });
+    return Object.values(map)
+      .map(x => ({ name: x.name, voznja: Math.round(x.v/60*10)/10, delo: Math.round(x.d/60*10)/10, total: Math.round((x.v+x.d)/60*10)/10 }))
+      .sort((a, b) => b.total - a.total);
+  }, [tahData, voznikiList]);
+
+  const vehicleHours = useMemo(() => {
+    const map = {};
+    tahData.filter(z => z.registrska && (z.stanje === 'VOZNJA' || z.stanje === 'DELO')).forEach(z => {
+      if (!map[z.registrska]) map[z.registrska] = { v: 0, d: 0 };
+      if (z.stanje === 'VOZNJA') map[z.registrska].v += z.trajanje_min ?? 0;
+      else map[z.registrska].d += z.trajanje_min ?? 0;
+    });
+    return Object.entries(map)
+      .map(([reg, x]) => ({ registerska: reg, voznja: Math.round(x.v/60*10)/10, delo: Math.round(x.d/60*10)/10, total: Math.round((x.v+x.d)/60*10)/10 }))
+      .sort((a, b) => b.total - a.total);
+  }, [tahData]);
+
+  const driverDailyTrend = useMemo(() => {
+    const map = {};
+    tahData.filter(z => z.stanje === 'VOZNJA' || z.stanje === 'DELO').forEach(z => {
+      const k = z.fk_uporabnik;
+      const name = z.uporabnik ? `${z.uporabnik.priimek} ${z.uporabnik.ime[0]}.` : `ID ${k}`;
+      if (!map[k]) map[k] = { label: name, dnevno: Array(lastDay).fill(0) };
+      const day = new Date(z.zacetek).getDate();
+      if (day >= 1 && day <= lastDay) map[k].dnevno[day - 1] += (z.trajanje_min ?? 0) / 60;
+    });
+    return Object.values(map)
+      .map(x => ({ ...x, dnevno: x.dnevno.map(h => Math.round(h * 10) / 10) }))
+      .filter(x => x.dnevno.some(h => h > 0))
+      .sort((a, b) => b.dnevno.reduce((s, h) => s + h, 0) - a.dnevno.reduce((s, h) => s + h, 0));
+  }, [tahData, lastDay]);
+
+  const weeklyPattern = useMemo(() => {
+    const sums = Array(7).fill(0), cnt = Array(7).fill(0);
+    tahData.filter(z => z.stanje === 'VOZNJA' || z.stanje === 'DELO').forEach(z => {
+      const dow = (new Date(z.zacetek).getDay() + 6) % 7;
+      sums[dow] += (z.trajanje_min ?? 0) / 60;
+      cnt[dow]++;
+    });
+    return TEDEN.map((label, i) => ({ label, value: cnt[i] > 0 ? Math.round(sums[i] / cnt[i] * 10) / 10 : 0 }));
+  }, [tahData]);
+
+  const topStranke = useMemo(() => {
+    const map = {};
+    urnikMesec.filter(u => u.cena != null && u.stranka).forEach(u => {
+      const n = u.stranka.naziv || '—';
+      if (!map[n]) map[n] = { skupaj: 0, placano: 0 };
+      map[n].skupaj += u.cena;
+      if (u.placano) map[n].placano += u.cena;
+    });
+    return Object.entries(map)
+      .map(([naziv, x]) => ({ label: naziv, value: Math.round(x.skupaj*100)/100, value2: Math.round(x.placano*100)/100 }))
+      .sort((a, b) => b.value - a.value).slice(0, 7);
+  }, [urnikMesec]);
+
+  const compliance = useMemo(() => {
+    const map = {};
+    tahData.filter(z => z.stanje === 'VOZNJA').forEach(z => {
+      const k = z.fk_uporabnik;
+      const name = z.uporabnik ? `${z.uporabnik.priimek} ${z.uporabnik.ime[0]}.` : `ID ${k}`;
+      const day = new Date(z.zacetek).toISOString().slice(0, 10);
+      if (!map[k]) map[k] = { name, days: {} };
+      map[k].days[day] = (map[k].days[day] || 0) + (z.trajanje_min ?? 0) / 60;
+    });
+    return Object.values(map).map(x => {
+      const vals = Object.values(x.days);
+      return { name: x.name, maxDnevno: Math.round(Math.max(0, ...vals) * 10) / 10, presezkov: vals.filter(h => h > 9).length, dni: vals.length };
+    }).sort((a, b) => b.presezkov - a.presezkov || b.maxDnevno - a.maxDnevno);
+  }, [tahData]);
+
+  // "Vožnje po mesecih" — count of manually entered trips per month (last 12)
+  const voznjePoMesecih = useMemo(() => {
+    const map = {};
+    voznjeAll.forEach(v => {
+      const key = new Date(v.zacetek).toISOString().slice(0, 7);
+      map[key] = (map[key] || 0) + 1;
+    });
+    return Object.entries(map)
+      .sort(([a], [b]) => a.localeCompare(b))
+      .slice(-12)
+      .map(([mesec, stevilo]) => ({
+        label: new Date(mesec + '-01').toLocaleDateString('sl-SI', { month: 'short', year: '2-digit' }),
+        value: stevilo,
+      }));
+  }, [voznjeAll]);
+
+  // Per-driver stanje breakdown for selected period (MesecniPregled)
+  const stanjeByVoznik = useMemo(() => {
+    if (!selectedVoznikStanje) return [];
+    const id = parseInt(selectedVoznikStanje);
+    const [year, month] = period.split('-').map(Number);
+    const daysInMonth = new Date(year, month, 0).getDate();
+    const dnevno = {};
+    for (let i = 1; i <= daysInMonth; i++) {
+      dnevno[i] = { VOZNJA: 0, DELO: 0, ODMOR: 0, POCITEK: 0, RAZPOLOZLJIVOST: 0, DRUGO: 0 };
+    }
+    tahData.filter(z => z.fk_uporabnik === id).forEach(z => {
+      const d = new Date(z.zacetek).getDate();
+      const s = z.stanje in dnevno[d] ? z.stanje : 'DRUGO';
+      if (dnevno[d]) dnevno[d][s] += (z.trajanje_min ?? 0) / 60;
+    });
+    return Object.entries(dnevno).map(([dan, s]) => ({
+      dan: parseInt(dan),
+      voznja: Math.round(s.VOZNJA * 100) / 100,
+      delo: Math.round(s.DELO * 100) / 100,
+      odmor: Math.round(s.ODMOR * 100) / 100,
+      pocitek: Math.round(s.POCITEK * 100) / 100,
+      razpolozljivost: Math.round(s.RAZPOLOZLJIVOST * 100) / 100,
+    }));
+  }, [tahData, selectedVoznikStanje, period]);
+
+  const stanjeVoznikiOptions = useMemo(() =>
+    Array.from(new Map(tahData.map(z => [z.fk_uporabnik, z.uporabnik])).entries())
+      .map(([id, u]) => ({ id, name: u ? `${u.ime} ${u.priimek}` : `ID ${id}` }))
+      .sort((a, b) => a.name.localeCompare(b.name)),
+    [tahData]);
+
+  const monthlyRevenueTrend = useMemo(() => {
+    const map = {};
+    urnikData.filter(u => u.cena != null).forEach(u => {
+      const key = new Date(u.datum).toISOString().slice(0, 7);
+      if (!map[key]) map[key] = { skupaj: 0, placano: 0 };
+      map[key].skupaj += u.cena;
+      if (u.placano) map[key].placano += u.cena;
+    });
+    return Object.entries(map).sort(([a], [b]) => a.localeCompare(b)).slice(-6)
+      .map(([m, x]) => ({ label: m.slice(5) + '/' + m.slice(2, 4), value: Math.round(x.skupaj*100)/100, value2: Math.round(x.placano*100)/100 }));
+  }, [urnikData]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-gray-400 gap-3">
+        <span className="material-symbols-outlined animate-spin text-2xl">sync</span>
+        <span>Nalaganje analitike…</span>
+      </div>
+    );
+  }
+
+  const noData = tahData.length === 0 && urnikMesec.length === 0;
+
+  return (
+    <div className="space-y-6">
+      {/* Header + period */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold text-gray-900">Analitika</h2>
+          <p className="text-sm text-gray-500 mt-0.5">Pregled aktivnosti, financ in skladnosti za izbrani mesec</p>
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm font-medium text-gray-600">Mesec:</label>
+          <input type="month" value={period} onChange={e => setPeriod(e.target.value)}
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+        </div>
+      </div>
+
+      {noData && (
+        <div className="rounded-xl border border-dashed border-gray-300 bg-white p-10 text-center text-gray-400">
+          Ni tahografskih ali urnik podatkov za {period}.
+        </div>
+      )}
+
+      {/* ── KPI row ── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        {[
+          { label: 'Ure vožnje',      value: fmtH(kpi.voznjaH),         icon: 'directions_car', bg: 'bg-blue-50',   ic: 'text-blue-600' },
+          { label: 'Ure dela',        value: fmtH(kpi.deloH),            icon: 'work',           bg: 'bg-purple-50', ic: 'text-purple-600' },
+          { label: 'Ure počitka',     value: fmtH(kpi.pocitekH),         icon: 'hotel',          bg: 'bg-green-50',  ic: 'text-green-600' },
+          { label: 'Aktivnih voznikov', value: kpi.aktivniVozniki,        icon: 'group',          bg: 'bg-amber-50',  ic: 'text-amber-600' },
+          { label: 'Aktivnih vozil',  value: kpi.aktivnaVozila,           icon: 'directions_bus', bg: 'bg-sky-50',    ic: 'text-sky-600' },
+          { label: 'Prevozov',        value: kpi.stPrevozov,              icon: 'add_road',       bg: 'bg-indigo-50', ic: 'text-indigo-600' },
+          { label: 'Skupaj vrednost', value: fmtEur(kpi.skupnaVrednost),  icon: 'euro',           bg: 'bg-emerald-50',ic: 'text-emerald-600' },
+          { label: 'Neplačano',       value: fmtEur(kpi.neplacano),       icon: 'cancel',         bg: 'bg-red-50',    ic: 'text-red-500' },
+        ].map(c => (
+          <div key={c.label} className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm flex items-center gap-3">
+            <div className={`w-10 h-10 ${c.bg} rounded-lg flex items-center justify-center shrink-0`}>
+              <span className={`material-symbols-outlined ${c.ic} text-[20px]`}>{c.icon}</span>
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs text-gray-500 truncate">{c.label}</p>
+              <p className="text-lg font-bold text-gray-900 truncate">{c.value}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Weekly pattern (full width) ── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <h3 className="text-sm font-bold text-gray-800 mb-1">Tedenska aktivnost</h3>
+        <p className="text-xs text-gray-400 mb-4">Povprečne ure vožnje + dela po dnevu v tednu</p>
+        <div className="h-64">
+          <VBarChart data={weeklyPattern} color="#2563eb" labelKey="label" valueKey="value" />
+        </div>
+      </div>
+
+      {/* ── Daily trend per driver ── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <h3 className="text-sm font-bold text-gray-800 mb-1">Dnevni trend po voznikih</h3>
+        <p className="text-xs text-gray-400 mb-4">
+          Ure vožnje in dela (DELO + VOZNJA) po dnevih — {period}
+          {driverDailyTrend.length === 0 && ' · ni podatkov'}
+        </p>
+        <div className="h-72">
+          <VozilaLineGraf lines={driverDailyTrend} days={lastDay} />
+        </div>
+        {driverDailyTrend.length > 0 && (
+          <div className="flex flex-wrap gap-4 mt-4">
+            {driverDailyTrend.map((l, i) => (
+              <div key={l.label} className="flex items-center gap-2 text-xs text-gray-600">
+                <div className="w-6 h-2 rounded-full" style={{ backgroundColor: LINE_COLORS[i % LINE_COLORS.length] }} />
+                <span>{l.label}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Driver hours ── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <h3 className="text-sm font-bold text-gray-800 mb-1">Ure po voznikih</h3>
+        <div className="flex items-center gap-6 mb-4">
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <div className="w-4 h-4 rounded bg-blue-500" /> Vožnja
+          </div>
+          <div className="flex items-center gap-2 text-sm text-gray-600">
+            <div className="w-4 h-4 rounded bg-orange-400" /> Delo
+          </div>
+        </div>
+        {driverHours.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-6">Ni voznikov.</p>
+        ) : (
+          <div className="space-y-2">
+            {driverHours.map(d => (
+              <DriverHBar key={d.name} name={d.name} voznja={d.voznja} delo={d.delo}
+                maxTotal={driverHours[0].total || 1} />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Vehicle hours ── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <h3 className="text-sm font-bold text-gray-800 mb-1">Ure po vozilih</h3>
+        <p className="text-xs text-gray-400 mb-4">Skupne ure vožnje in dela (VOZNJA + DELO) po vozilu</p>
+        {vehicleHours.length === 0 ? (
+          <p className="text-sm text-gray-400 text-center py-6">Ni tahografskih zapisov z registrsko številko.</p>
+        ) : (
+          <div className="space-y-2">
+            {vehicleHours.map(v => (
+              <HBar key={v.registerska} label={v.registerska} value={v.total}
+                max={vehicleHours[0].total} color="#0284c7" unit="h" />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* ── Driver compliance ── */}
+      {compliance.length > 0 && (
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="text-sm font-bold text-gray-800 mb-1">Skladnost vožnje voznikov</h3>
+          <p className="text-xs text-gray-400 mb-4">Max dnevna vožnja in prekoračitve meje 9h (Uredba EU 561/2006)</p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-xs">
+              <thead>
+                <tr className="border-b border-gray-100 text-gray-500 uppercase tracking-wide">
+                  <th className="py-2 text-left font-semibold">Voznik</th>
+                  <th className="py-2 text-center font-semibold">Dni z vožnjo</th>
+                  <th className="py-2 text-center font-semibold">Max dnevna vožnja</th>
+                  <th className="py-2 text-center font-semibold">Prekoračitve 9h</th>
+                  <th className="py-2 text-left font-semibold">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                {compliance.map(c => (
+                  <tr key={c.name} className="border-b border-gray-50 hover:bg-gray-50">
+                    <td className="py-2.5 font-medium text-gray-800">{c.name}</td>
+                    <td className="py-2.5 text-center text-gray-600">{c.dni}</td>
+                    <td className="py-2.5 text-center">
+                      <span className={`font-semibold ${c.maxDnevno > 9 ? 'text-red-600' : 'text-gray-700'}`}>
+                        {fmtH(c.maxDnevno)}
+                      </span>
+                    </td>
+                    <td className="py-2.5 text-center">
+                      <span className={`font-bold ${c.presezkov > 0 ? 'text-red-600' : 'text-emerald-600'}`}>
+                        {c.presezkov}
+                      </span>
+                    </td>
+                    <td className="py-2.5">
+                      {c.presezkov > 0
+                        ? <span className="inline-flex items-center gap-1 text-red-600 font-semibold"><span className="material-symbols-outlined text-[13px]">warning</span>Prekoračitev</span>
+                        : <span className="inline-flex items-center gap-1 text-emerald-600"><span className="material-symbols-outlined text-[13px]">check_circle</span>Skladna</span>
+                      }
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {/* ── Vožnje po mesecih ── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <h3 className="text-sm font-bold text-gray-800 mb-1">Vožnje po mesecih</h3>
+        <p className="text-xs text-gray-400 mb-4">Število ročno vnesenih voženj v zadnjih 12 mesecih</p>
+        <div className="h-64">
+          {voznjePoMesecih.length > 0
+            ? <VBarChart data={voznjePoMesecih} color="#2563eb" labelKey="label" valueKey="value" />
+            : <div className="flex items-center justify-center h-full text-gray-400 text-sm">Ni podatkov o vožnjah.</div>}
+        </div>
+      </div>
+
+      {/* ── Dnevna stanja po voznikih (MesecniPregled) ── */}
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">Dnevna stanja voznika</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Razporeditev aktivnosti po dnevih — {period}</p>
+          </div>
+          <select value={selectedVoznikStanje} onChange={e => setSelectedVoznikStanje(e.target.value)}
+            className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
+            <option value="">— Izberi voznika —</option>
+            {stanjeVoznikiOptions.map(v => <option key={v.id} value={v.id}>{v.name}</option>)}
+          </select>
+        </div>
+        {!selectedVoznikStanje ? (
+          <div className="flex items-center justify-center h-32 text-gray-400 text-sm">Izberi voznika za prikaz.</div>
+        ) : stanjeByVoznik.length === 0 ? (
+          <div className="flex items-center justify-center h-32 text-gray-400 text-sm">Ni tahografskih zapisov za ta mesec.</div>
+        ) : (
+          <>
+            <div className="h-72">
+              <svg viewBox={`0 0 1200 300`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+                <rect width="1200" height="300" fill="white" />
+                {(() => {
+                  const maxH = Math.max(1, ...stanjeByVoznik.map(d => d.voznja + d.delo + d.odmor + d.pocitek + d.razpolozljivost));
+                  const bW = Math.min(28, 1100 / stanjeByVoznik.length - 4);
+                  const sp = 1100 / stanjeByVoznik.length;
+                  const PAD_L = 60, PAD_T = 20, gH = 240;
+                  const yP = v => PAD_T + gH - (v / maxH) * gH;
+                  const STACKED = [
+                    { key: 'pocitek',        color: '#166534' },
+                    { key: 'odmor',          color: '#92400e' },
+                    { key: 'razpolozljivost',color: '#c2410c' },
+                    { key: 'delo',           color: '#6b21a8' },
+                    { key: 'voznja',         color: '#1d4ed8' },
+                  ];
+                  return (
+                    <>
+                      {[0, 0.25, 0.5, 0.75, 1].map(f => {
+                        const y = yP(maxH * f);
+                        return (
+                          <g key={f}>
+                            <line x1={PAD_L} y1={y} x2={1190} y2={y} stroke="#f3f4f6" strokeWidth="1" />
+                            <text x={PAD_L - 4} y={y + 4} fontSize="10" fill="#9ca3af" textAnchor="end">{Math.round(maxH*f*10)/10}h</text>
+                          </g>
+                        );
+                      })}
+                      {stanjeByVoznik.map((d, i) => {
+                        const x = PAD_L + i * sp + (sp - bW) / 2;
+                        let yTop = PAD_T + gH;
+                        return (
+                          <g key={d.dan}>
+                            {STACKED.map(({ key, color }) => {
+                              const h = (d[key] / maxH) * gH;
+                              if (h <= 0) return null;
+                              yTop -= h;
+                              return <rect key={key} x={x} y={yTop} width={bW} height={h} fill={color} />;
+                            })}
+                            {(i === 0 || i % 3 === 0 || i === stanjeByVoznik.length - 1) && (
+                              <text x={x + bW / 2} y={PAD_T + gH + 14} fontSize="10" fill="#9ca3af" textAnchor="middle">{d.dan}</text>
+                            )}
+                          </g>
+                        );
+                      })}
+                    </>
+                  );
+                })()}
+              </svg>
+            </div>
+            <div className="flex flex-wrap gap-4 mt-3">
+              {[
+                { color: '#1d4ed8', label: 'Vožnja' },
+                { color: '#6b21a8', label: 'Delo' },
+                { color: '#c2410c', label: 'Razpoložljivost' },
+                { color: '#92400e', label: 'Odmor' },
+                { color: '#166534', label: 'Počitek' },
+              ].map(s => (
+                <div key={s.label} className="flex items-center gap-2 text-xs text-gray-500">
+                  <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: s.color }} />
+                  {s.label}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ── Financial: monthly trend + top stranke ── */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="text-sm font-bold text-gray-800 mb-1">Prihodki – zadnjih 6 mesecev</h3>
+          <div className="flex items-center gap-4 mb-3">
+            <div className="flex items-center gap-1.5 text-xs text-gray-500"><div className="w-3 h-2 rounded-sm bg-emerald-600" /> Skupaj</div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-500"><div className="w-3 h-2 rounded-sm bg-emerald-600 opacity-50" /> Plačano</div>
+          </div>
+          <div className="h-64">
+            {monthlyRevenueTrend.length > 0
+              ? <VBarChart data={monthlyRevenueTrend} color="#059669" color2="#059669" labelKey="label" valueKey="value" value2Key="value2" />
+              : <p className="text-xs text-gray-400 text-center pt-8">Ni podatkov o prihodkih.</p>}
+          </div>
+        </div>
+
+        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+          <h3 className="text-sm font-bold text-gray-800 mb-1">Top stranke — {period}</h3>
+          <p className="text-xs text-gray-400 mb-3">Vrednost prevozov po stranki (sivo = neplačano)</p>
+          {topStranke.length === 0 ? (
+            <p className="text-xs text-gray-400 text-center py-4">Ni prevozov z znano stranko za ta mesec.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {topStranke.map(s => {
+                const neplacano = Math.round((s.value - s.value2) * 100) / 100;
+                return (
+                  <div key={s.label} className="flex items-center gap-3">
+                    <span className="text-xs text-gray-600 w-28 truncate shrink-0 text-right">{s.label}</span>
+                    <div className="flex-1 h-5 bg-gray-100 rounded-full overflow-hidden relative">
+                      <div className="h-full rounded-full bg-emerald-500 absolute left-0"
+                        style={{ width: `${(s.value / topStranke[0].value) * 100}%` }} />
+                      <div className="h-full rounded-full bg-gray-300 absolute left-0"
+                        style={{ width: `${(neplacano / topStranke[0].value) * 100}%`, opacity: 0.6 }} />
+                    </div>
+                    <span className="text-xs font-semibold text-gray-700 w-20 text-right shrink-0">{fmtEur(s.value)}</span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function VozilaLineGraf({ lines, days }) {
+  if (!lines.length) {
+    return (
+      <div className="flex items-center justify-center h-full text-gray-400 text-sm">
+        Ni podatkov za izbrani mesec.
+      </div>
+    );
+  }
+
+  const allValues = lines.flatMap((l) => l.dnevno);
+  const maxUre = Math.max(1, ...allValues);
+  const W = 1200, H = 300, PAD_L = 70, PAD_R = 20, PAD_T = 20, PAD_B = 40;
+  const gW = W - PAD_L - PAD_R;
+  const gH = H - PAD_T - PAD_B;
+
+  const xPos = (day) => PAD_L + ((day - 1) / (days - 1 || 1)) * gW;
+  const yPos = (ure) => PAD_T + gH - (ure / maxUre) * gH;
+
+  const yLabels = [0, 0.25, 0.5, 0.75, 1];
+
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
+      <rect width={W} height={H} fill="white" />
+
+      {/* Grid + Y labels */}
+      {yLabels.map((frac) => {
+        const val = Math.round(maxUre * frac * 10) / 10;
+        const y = yPos(maxUre * frac);
+        return (
+          <g key={frac}>
+            <line x1={PAD_L} y1={y} x2={W - PAD_R} y2={y} stroke="#f3f4f6" strokeWidth="1" />
+            <text x={PAD_L - 6} y={y + 4} fontSize="11" fill="#9ca3af" textAnchor="end">{val}h</text>
+          </g>
+        );
+      })}
+
+      {/* Axes */}
+      <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={PAD_T + gH} stroke="#e5e7eb" strokeWidth="1" />
+      <line x1={PAD_L} y1={PAD_T + gH} x2={W - PAD_R} y2={PAD_T + gH} stroke="#e5e7eb" strokeWidth="1" />
+
+      {/* X day labels — every 3rd day */}
+      {Array.from({ length: days }, (_, i) => i + 1)
+        .filter((d) => d === 1 || d % 3 === 0 || d === days)
+        .map((d) => (
+          <text key={d} x={xPos(d)} y={H - PAD_B + 14} fontSize="11" fill="#9ca3af" textAnchor="middle">{d}</text>
+        ))}
+
+      {/* Lines */}
+      {lines.map((line, li) => {
+        const color = LINE_COLORS[li % LINE_COLORS.length];
+        const key = line.label ?? line.registerska;
+        const points = Array.from({ length: days }, (_, i) => {
+          const d = i + 1;
+          return `${xPos(d)},${yPos(line.dnevno[i] ?? 0)}`;
+        }).join(' ');
+        return (
+          <g key={key}>
+            <polyline points={points} fill="none" stroke={color} strokeWidth="2.5"
+              strokeLinecap="round" strokeLinejoin="round" />
+            {Array.from({ length: days }, (_, i) => i + 1)
+              .filter((d) => (line.dnevno[d - 1] ?? 0) > 0)
+              .map((d) => (
+                <circle key={d} cx={xPos(d)} cy={yPos(line.dnevno[d - 1])} r="3" fill={color} />
+              ))}
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
 export default function Dashboard() {
   const [statistics, setStatistics] = useState({
     totalHours: 0,
@@ -275,6 +1029,15 @@ export default function Dashboard() {
   const [rides, setRides] = useState([]);
   const [alerts, setAlerts] = useState([]);
   const [dashLoading, setDashLoading] = useState(true);
+
+  const [selectedMonthUre, setSelectedMonthUre] = useState(() => new Date().toISOString().slice(0, 7));
+  const [skupneUre, setSkupneUre] = useState(null);
+  const [ureLoading, setUreLoading] = useState(false);
+
+  const [selectedMonthVozila, setSelectedMonthVozila] = useState(() => new Date().toISOString().slice(0, 7));
+  const [vozilaLines, setVozilaLines] = useState([]);
+  const [vozilaGrafDays, setVozilaGrafDays] = useState(30);
+  const [vozilaLoading, setVozilaLoading] = useState(false);
 
   const [selectedDate, setSelectedDate] = useState('');
   const [routes, setRoutes] = useState([]);
@@ -308,6 +1071,72 @@ export default function Dashboard() {
     };
     load();
   }, []);
+
+  useEffect(() => {
+    const fetch = async () => {
+      setUreLoading(true);
+      try {
+        const [year, month] = selectedMonthUre.split('-').map(Number);
+        const od = `${selectedMonthUre}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const doDate = `${selectedMonthUre}-${String(lastDay).padStart(2, '0')}`;
+        const res = await api.get(`/admin/tahograf?od=${od}&do=${doDate}`);
+        const skupaj = (res.data || [])
+          .filter((z) => z.stanje === 'DELO' || z.stanje === 'VOZNJA')
+          .reduce((sum, z) => sum + (z.trajanje_min ?? 0), 0);
+        setSkupneUre(Math.round(skupaj / 60 * 10) / 10);
+      } catch {
+        setSkupneUre(null);
+      } finally {
+        setUreLoading(false);
+      }
+    };
+    fetch();
+  }, [selectedMonthUre]);
+
+  useEffect(() => {
+    const fetch = async () => {
+      setVozilaLoading(true);
+      try {
+        const [year, month] = selectedMonthVozila.split('-').map(Number);
+        const od = `${selectedMonthVozila}-01`;
+        const lastDay = new Date(year, month, 0).getDate();
+        const doDate = `${selectedMonthVozila}-${String(lastDay).padStart(2, '0')}`;
+        setVozilaGrafDays(lastDay);
+
+        const [tahRes, vozilaRes] = await Promise.all([
+          api.get(`/admin/tahograf?od=${od}&do=${doDate}`),
+          api.get('/vozila'),
+        ]);
+
+        const zapisi = tahRes.data || [];
+        const vozila = vozilaRes.data || [];
+
+        const lines = vozila
+          .map((v) => {
+            const dnevno = Array(lastDay).fill(0);
+            zapisi
+              .filter((z) => z.registrska === v.registerska && (z.stanje === 'DELO' || z.stanje === 'VOZNJA'))
+              .forEach((z) => {
+                const day = new Date(z.zacetek).getDate();
+                if (day >= 1 && day <= lastDay) {
+                  dnevno[day - 1] += (z.trajanje_min ?? 0) / 60;
+                }
+              });
+            dnevno.forEach((_, i) => { dnevno[i] = Math.round(dnevno[i] * 10) / 10; });
+            return { registerska: v.registerska, dnevno };
+          })
+          .filter((l) => l.dnevno.some((h) => h > 0));
+
+        setVozilaLines(lines);
+      } catch {
+        setVozilaLines([]);
+      } finally {
+        setVozilaLoading(false);
+      }
+    };
+    fetch();
+  }, [selectedMonthVozila]);
 
   const displayRoutes = useMemo(() => {
     if (!selectedDate) return routes;
@@ -445,55 +1274,63 @@ export default function Dashboard() {
         {activeTab === 'dashboard' && (
           <>
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-8">
-              <StatCard label="Skupne ure"       value={statistics.totalHours.toLocaleString()} unit="h"        iconName="schedule" bgColor="bg-blue-100"   iconColor="text-blue-600"   trend="↑ 12%"                                  />
-              <StatCard label="Skupni kilometri" value={statistics.totalKm.toLocaleString()}   unit="km"       iconName="route"    bgColor="bg-orange-100" iconColor="text-orange-600" trend="↑ 5.6%"                                 />
-              <StatCard label="Vozniki v bazi"   value={statistics.totalDrivers.toLocaleString()} unit="voznikov" iconName="group" bgColor="bg-green-100"  iconColor="text-green-600"  trend={`${statistics.activeDrivers} aktivnih`} />
+              <div className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200 shadow-sm">
+                <div className="flex items-start justify-between mb-2">
+                  <p className="text-gray-600 text-xs font-semibold uppercase tracking-wide">Skupne ure</p>
+                  <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
+                    <span className="material-symbols-outlined text-blue-600 text-sm">schedule</span>
+                  </div>
+                </div>
+                <div className="flex items-end gap-3 mb-3">
+                  <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+                    {ureLoading ? '…' : skupneUre !== null ? skupneUre.toLocaleString('sl-SI') : '—'}
+                  </p>
+                  <p className="text-sm text-gray-500 mb-1">h (delo + vožnja)</p>
+                </div>
+                <input
+                  type="month"
+                  value={selectedMonthUre}
+                  onChange={(e) => setSelectedMonthUre(e.target.value)}
+                  className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <StatCard label="Skupni kilometri" value={statistics.totalKm.toLocaleString()}      unit="km"       iconName="route"    bgColor="bg-orange-100" iconColor="text-orange-600" trend="↑ 5.6%"                                 />
+              <StatCard label="Vozniki v bazi"   value={statistics.totalDrivers.toLocaleString()} unit="voznikov" iconName="group"    bgColor="bg-green-100"  iconColor="text-green-600"  trend={`${statistics.activeDrivers} aktivnih`} />
             </div>
 
             <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-8 shadow-sm">
-              <h2 className="text-base sm:text-lg font-bold text-gray-900 mb-1">Aktivnost vozil</h2>
-              <p className="text-xs sm:text-sm text-gray-500 mb-6">Prevoženi kilometri v zadnjih 24 urah</p>
-
-              <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 mb-6 pb-4 border-b border-gray-200">
-                <div className="flex gap-2 flex-wrap">
-                  {['Danes', 'Teden', 'Mesec', 'Po meri'].map((label, i) => (
-                    <button key={label} className={`px-3 py-1.5 text-xs sm:text-sm rounded-lg font-medium ${
-                      i === 0 ? 'bg-blue-600 text-white hover:bg-blue-700' : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
-                    }`}>{label}</button>
-                  ))}
+              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+                <div>
+                  <h2 className="text-base sm:text-lg font-bold text-gray-900">Aktivnost vozil</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Dnevne ure dela in vožnje po vozilu (DELO + VOZNJA)</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="month"
+                    value={selectedMonthVozila}
+                    onChange={(e) => setSelectedMonthVozila(e.target.value)}
+                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  {vozilaLoading && (
+                    <span className="material-symbols-outlined animate-spin text-[18px] text-blue-400">sync</span>
+                  )}
                 </div>
               </div>
 
-              <div className="w-full h-64 sm:h-80 bg-white rounded-lg border border-gray-100 p-4 sm:p-6">
-                <svg viewBox="0 0 800 300" className="w-full h-full" preserveAspectRatio="xMidYMid meet">
-                  <defs>
-                    <pattern id="grid" width="100" height="30" patternUnits="userSpaceOnUse">
-                      <path d="M 100 0 L 0 0 0 30" fill="none" stroke="#e5e7eb" strokeWidth="1"/>
-                    </pattern>
-                  </defs>
-                  <rect width="800" height="300" fill="url(#grid)" />
-                  {[['100',20],['75',95],['50',170],['25',245],['0',285]].map(([v,y]) => (
-                    <text key={v} x="20" y={y} fontSize="12" fill="#6b7280">{v}</text>
-                  ))}
-                  <line x1="40" y1="20" x2="40"  y2="260" stroke="#374151" strokeWidth="2"/>
-                  <line x1="40" y1="260" x2="800" y2="260" stroke="#374151" strokeWidth="2"/>
-                  <polyline points="80,200 160,140 240,100 320,120 400,160 480,180 560,140 640,100 720,140 780,160" fill="none" stroke="#2563eb" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-                  <polyline points="80,220 160,170 240,120 320,100 400,140 480,160 560,120 640,80 720,120 780,150"  fill="none" stroke="#f97316" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"/>
-                  <polyline points="80,240 160,200 240,160 320,140 400,180 480,200 560,160 640,140 720,180 780,200" fill="none" stroke="#9ca3af" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" strokeDasharray="5,5"/>
-                  {[['06:00',70],['09:00',150],['12:00',230],['15:00',310],['18:00',390],['21:00',470],['00:00',550]].map(([t,x]) => (
-                    <text key={t} x={x} y="285" fontSize="12" fill="#6b7280">{t}</text>
-                  ))}
-                </svg>
+              <div className="w-full h-64 sm:h-72 bg-white rounded-lg border border-gray-100 p-2">
+                <VozilaLineGraf lines={vozilaLines} days={vozilaGrafDays} />
               </div>
 
-              <div className="flex gap-4 sm:gap-6 mt-6 flex-wrap text-sm">
-                {[['#2563eb','LS-BUS-01'],['#f97316','MR-BUS-02'],['#9ca3af','KP-BUS-03']].map(([color, label]) => (
-                  <div key={label} className="flex items-center gap-2">
-                    <div className="w-3 h-3 rounded" style={{ backgroundColor: color }}></div>
-                    <span className="text-gray-600 text-xs sm:text-sm">{label}</span>
-                  </div>
-                ))}
-              </div>
+              {vozilaLines.length > 0 && (
+                <div className="flex flex-wrap gap-4 mt-4">
+                  {vozilaLines.map((l, i) => (
+                    <div key={l.registerska} className="flex items-center gap-2 text-xs text-gray-600">
+                      <div className="w-6 h-2 rounded-full" style={{ backgroundColor: LINE_COLORS[i % LINE_COLORS.length] }}></div>
+                      <span>{l.registerska}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-8 shadow-sm">
@@ -673,12 +1510,7 @@ export default function Dashboard() {
           </>
         )}
 
-        {activeTab === 'analytics' && (
-          <div className="bg-white rounded-lg border border-gray-200 p-8 text-center shadow-sm text-gray-400">
-            <span className="material-symbols-outlined text-4xl mb-3 block">bar_chart</span>
-            <p className="text-sm">Analitika – prihaja kmalu.</p>
-          </div>
-        )}
+        {activeTab === 'analytics' && <AnalyticsTab />}
 
       </main>
     </div>
