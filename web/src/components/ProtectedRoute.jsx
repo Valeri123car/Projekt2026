@@ -7,7 +7,7 @@ export default function ProtectedRoute({ children, vlogaRequired }) {
   if (!token) return <Navigate to="/login" />
   if (vlogaRequired) {
     const allowed = Array.isArray(vlogaRequired) ? vlogaRequired : [vlogaRequired]
-    if (!allowed.includes(vloga)) return <Navigate to="/" />
+    if (!allowed.includes(vloga)) return <Navigate to="/voznje" />
   }
 
   return children

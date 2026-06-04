@@ -2,7 +2,7 @@ import { Link, useLocation } from 'react-router-dom'
 import { useAuth } from '../hooks/useAuth'
 
 const navItems = [
-  { path: '/',           icon: 'dashboard',      label: 'Nadzorna plošča', vloge: [1, 2, 3] },
+  { path: '/',           icon: 'dashboard',      label: 'Nadzorna plošča', vloge: [2, 3] },
   { path: '/voznje',     icon: 'directions_car', label: 'Vožnje',           vloge: [1, 2, 3] },
   { path: '/vozniki',    icon: 'group',          label: 'Vozniki',          vloge: [2, 3] },
   { path: '/racuni',     icon: 'receipt_long',   label: 'Računi',           vloge: [2, 3] },

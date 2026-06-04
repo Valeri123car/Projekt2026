@@ -20,7 +20,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={<Login />} />
-          <Route path="/" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+          <Route path="/" element={<ProtectedRoute vlogaRequired={[2, 3]}><Dashboard /></ProtectedRoute>} />
           <Route path="/racuni" element={<ProtectedRoute vlogaRequired={[2, 3]}><Racuni /></ProtectedRoute>} />
           <Route path="/vozniki" element={<ProtectedRoute vlogaRequired={[2, 3]}><Vozniki /></ProtectedRoute>} />
           <Route path="/uporabniki" element={<ProtectedRoute vlogaRequired={2}><Uporabniki /></ProtectedRoute>} />
