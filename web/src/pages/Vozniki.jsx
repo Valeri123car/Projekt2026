@@ -419,16 +419,20 @@ export default function Vozniki() {
   };
 
   const fetchUrnik = async () => {
-    try {
-      setUrnikLoading(true);
-      const response = await api.get('/admin/urnik');
-      setUrnik(response.data || []);
-    } catch (err) {
-      console.error('Error fetching urnik:', err);
-    } finally {
-      setUrnikLoading(false);
-    }
-  };
+  try {
+    setUrnikLoading(true);
+    const [urnikRes, voznjeRes] = await Promise.all([
+      api.get('/admin/urnik').catch(() => ({ data: [] })),
+      api.get('/admin/voznje').catch(() => ({ data: [] })),
+    ]);
+    const merged = normalizeForCalendar(urnikRes.data || [], voznjeRes.data || []);
+    setUrnik(merged);
+  } catch (err) {
+    console.error('Error fetching calendar data:', err);
+  } finally {
+    setUrnikLoading(false);
+  }
+};
 
   useEffect(() => {
     fetchVozniki();
@@ -588,6 +592,36 @@ export default function Vozniki() {
     if (dostop === 2) return 'ADMIN';
     return 'VOZNIK';
   };
+
+  const normalizeForCalendar = (urnikEntries, voznjeEntries) => {
+  const fromUrnik = urnikEntries.map((e) => ({
+    id_urnik: e.id_urnik,
+    datum: e.datum,
+    fk_uporabnik: e.fk_uporabnik,
+    uporabnik: e.uporabnik,
+    stranka: e.stranka,
+    vozilo: e.vozilo,
+    naziv: e.naziv,
+    cena: e.cena,
+    placano: e.placano,
+    _vir: 'urnik',
+  }));
+
+  const fromVoznje = voznjeEntries.map((e) => ({
+    id_urnik: `v_${e.id_voznja}`,
+    datum: e.datum || e.zacetek,
+    fk_uporabnik: e.fk_uporabnik,
+    uporabnik: e.uporabnik,
+    stranka: e.stranka ? { naziv: e.stranka } : null,
+    vozilo: e.registerska ? { registracija: e.registerska } : null,
+    naziv: e.relacija || e.opis || null,
+    cena: null,
+    placano: false,
+    _vir: 'voznja',
+  }));
+
+  return [...fromUrnik, ...fromVoznje];
+};
 
   // ── Driver detail / report view ──────────────────────────────────────────
   if (selectedDriver) {
