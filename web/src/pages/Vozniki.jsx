@@ -342,6 +342,33 @@ function buildReportPeriodLabel(dateFrom, dateTo, rides, formatDateCompact) {
   return `${formatDateCompact(sorted[0])} - ${formatDateCompact(sorted[sorted.length - 1])}`;
 }
 
+async function generatePDFDoc(selectedDriver, pdfTemplateRef, setPdfLoading, setRidesError) {
+  if (!selectedDriver || !pdfTemplateRef.current) return;
+  try {
+    setPdfLoading(true);
+    const canvas    = await html2canvas(pdfTemplateRef.current, { scale: 2, backgroundColor: '#ffffff' });
+    const imgData   = canvas.toDataURL('image/png');
+    const pdf       = new jsPDF('p', 'mm', 'a4');
+    const imgWidth  = 210;
+    const imgHeight = (canvas.height * imgWidth) / canvas.width;
+    let heightLeft  = imgHeight;
+    let position    = 0;
+    pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+    heightLeft -= 297;
+    while (heightLeft > 0) {
+      position = heightLeft - imgHeight;
+      pdf.addPage();
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= 297;
+    }
+    pdf.save(`Porocilo_voznje_${selectedDriver.ime}_${selectedDriver.priimek}_${new Date().toISOString().slice(0, 10)}.pdf`);
+  } catch {
+    setRidesError('Napaka pri ustvarjanju PDF poročila');
+  } finally {
+    setPdfLoading(false);
+  }
+}
+
 export default function Vozniki() {
   const [vozniki, setVozniki]             = useState([]);
   const [loading, setLoading]             = useState(true);
@@ -452,32 +479,8 @@ export default function Vozniki() {
     [...rides].sort((a, b) => new Date(b.datum || b.zacetek) - new Date(a.datum || a.zacetek)),
     [rides]);
 
-  const generatePDF = async () => {
-    if (!selectedDriver || !pdfTemplateRef.current) return;
-    try {
-      setPdfLoading(true);
-      const canvas   = await html2canvas(pdfTemplateRef.current, { scale: 2, backgroundColor: '#ffffff' });
-      const imgData  = canvas.toDataURL('image/png');
-      const pdf      = new jsPDF('p', 'mm', 'a4');
-      const imgWidth = 210;
-      const imgHeight = (canvas.height * imgWidth) / canvas.width;
-      let heightLeft = imgHeight;
-      let position   = 0;
-      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-      heightLeft -= 297;
-      while (heightLeft > 0) {
-        position = heightLeft - imgHeight;
-        pdf.addPage();
-        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
-        heightLeft -= 297;
-      }
-      pdf.save(`Porocilo_voznje_${selectedDriver.ime}_${selectedDriver.priimek}_${new Date().toISOString().slice(0, 10)}.pdf`);
-    } catch {
-      setRidesError('Napaka pri ustvarjanju PDF poročila');
-    } finally {
-      setPdfLoading(false);
-    }
-  };
+  const generatePDF = () =>
+  generatePDFDoc(selectedDriver, pdfTemplateRef, setPdfLoading, setRidesError);
 
   const totalPages      = Math.max(1, Math.ceil(vozniki.length / ITEMS_PER_PAGE));
   const paginatedVozniki = useMemo(() => {
