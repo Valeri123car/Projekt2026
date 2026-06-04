@@ -108,15 +108,18 @@ function getTahografDurationMinutes(zapis) {
 }
 
 async function loadTahografStatistics(app, query) {
-  const zapisi = await app.prisma.tahografZapis.findMany({
-    where: buildTahografFilters(query),
-    select: {
-      zacetek: true,
-      konec: true,
-      fk_uporabnik: true,
-      trajanje_min: true,
-    },
-  });
+  const [zapisi, totalDrivers] = await Promise.all([
+    app.prisma.tahografZapis.findMany({
+      where: buildTahografFilters(query),
+      select: {
+        zacetek: true,
+        konec: true,
+        fk_uporabnik: true,
+        trajanje_min: true,
+      },
+    }),
+    app.prisma.uporabnik.count({ where: { dostop: 1 } }),
+  ]);
 
   const totalMinutes = zapisi.reduce(
     (sum, zapis) => sum + getTahografDurationMinutes(zapis),
@@ -136,11 +139,11 @@ async function loadTahografStatistics(app, query) {
     totalKm: 0,
     currentlyDriving: currentlyDrivingIds.size,
     activeDrivers: driverIds.size,
-    totalDrivers: driverIds.size,
+    totalDrivers,
     skupne_ure: totalHours,
     trenutno_vozi: currentlyDrivingIds.size,
     aktivni_vozniki: driverIds.size,
-    skupaj_vozniki: driverIds.size,
+    skupaj_vozniki: totalDrivers,
   };
 } 
 function formatRecentRide(ride) {

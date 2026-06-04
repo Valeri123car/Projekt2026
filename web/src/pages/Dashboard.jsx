@@ -600,20 +600,16 @@ function AnalyticsTab() {
     const daysInMonth = new Date(year, month, 0).getDate();
     const dnevno = {};
     for (let i = 1; i <= daysInMonth; i++) {
-      dnevno[i] = { VOZNJA: 0, DELO: 0, ODMOR: 0, POCITEK: 0, RAZPOLOZLJIVOST: 0, DRUGO: 0 };
+      dnevno[i] = { VOZNJA: 0, DELO: 0 };
     }
-    tahData.filter(z => z.fk_uporabnik === id).forEach(z => {
+    tahData.filter(z => z.fk_uporabnik === id && (z.stanje === 'VOZNJA' || z.stanje === 'DELO')).forEach(z => {
       const d = new Date(z.zacetek).getDate();
-      const s = z.stanje in dnevno[d] ? z.stanje : 'DRUGO';
-      if (dnevno[d]) dnevno[d][s] += (z.trajanje_min ?? 0) / 60;
+      if (dnevno[d]) dnevno[d][z.stanje] += (z.trajanje_min ?? 0) / 60;
     });
     return Object.entries(dnevno).map(([dan, s]) => ({
       dan: parseInt(dan),
       voznja: Math.round(s.VOZNJA * 100) / 100,
       delo: Math.round(s.DELO * 100) / 100,
-      odmor: Math.round(s.ODMOR * 100) / 100,
-      pocitek: Math.round(s.POCITEK * 100) / 100,
-      razpolozljivost: Math.round(s.RAZPOLOZLJIVOST * 100) / 100,
     }));
   }, [tahData, selectedVoznikStanje, period]);
 
@@ -840,17 +836,14 @@ function AnalyticsTab() {
               <svg viewBox={`0 0 1200 300`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
                 <rect width="1200" height="300" fill="white" />
                 {(() => {
-                  const maxH = Math.max(1, ...stanjeByVoznik.map(d => d.voznja + d.delo + d.odmor + d.pocitek + d.razpolozljivost));
+                  const maxH = Math.max(1, ...stanjeByVoznik.map(d => d.voznja + d.delo));
                   const bW = Math.min(28, 1100 / stanjeByVoznik.length - 4);
                   const sp = 1100 / stanjeByVoznik.length;
                   const PAD_L = 60, PAD_T = 20, gH = 240;
                   const yP = v => PAD_T + gH - (v / maxH) * gH;
                   const STACKED = [
-                    { key: 'pocitek',        color: '#166534' },
-                    { key: 'odmor',          color: '#92400e' },
-                    { key: 'razpolozljivost',color: '#c2410c' },
-                    { key: 'delo',           color: '#6b21a8' },
-                    { key: 'voznja',         color: '#1d4ed8' },
+                    { key: 'delo',   color: '#f97316' },
+                    { key: 'voznja', color: '#1d4ed8' },
                   ];
                   return (
                     <>
@@ -888,10 +881,7 @@ function AnalyticsTab() {
             <div className="flex flex-wrap gap-4 mt-3">
               {[
                 { color: '#1d4ed8', label: 'Vožnja' },
-                { color: '#6b21a8', label: 'Delo' },
-                { color: '#c2410c', label: 'Razpoložljivost' },
-                { color: '#92400e', label: 'Odmor' },
-                { color: '#166534', label: 'Počitek' },
+                { color: '#f97316', label: 'Delo' },
               ].map(s => (
                 <div key={s.label} className="flex items-center gap-2 text-xs text-gray-500">
                   <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: s.color }} />
@@ -1026,8 +1016,9 @@ export default function Dashboard() {
     activeDrivers: 0,
     totalDrivers: 0,
   });
-  const [rides, setRides] = useState([]);
-  const [alerts, setAlerts] = useState([]);
+  const [urnikAll, setUrnikAll] = useState([]);
+  const [totalVozniki, setTotalVozniki] = useState(0);
+  const [dashTahData, setDashTahData] = useState([]);
   const [dashLoading, setDashLoading] = useState(true);
 
   const [selectedMonthUre, setSelectedMonthUre] = useState(() => new Date().toISOString().slice(0, 7));
@@ -1053,24 +1044,75 @@ export default function Dashboard() {
     const load = async () => {
       setDashLoading(true);
       try {
-        const [statsRes, ridesRes, alertsRes] = await Promise.all([
+        const now = new Date();
+        const curMonth = now.toISOString().slice(0, 7);
+        const od = `${curMonth}-01`;
+        const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+        const doDate = `${curMonth}-${String(lastDay).padStart(2, '0')}`;
+
+        const [statsRes, urnikRes, voznikiRes, tahRes] = await Promise.allSettled([
           api.get('/dashboard/statistics'),
-          api.get('/dashboard/recent-rides'),
-          api.get('/dashboard/alerts'),
+          api.get('/admin/urnik'),
+          api.get('/admin/vozniki'),
+          api.get(`/admin/tahograf?od=${od}&do=${doDate}`),
         ]);
-        setStatistics(statsRes.data);
-        setRides(ridesRes.data);
-        setAlerts(alertsRes.data);
+        if (statsRes.status === 'fulfilled')   setStatistics(statsRes.value.data);
+        if (urnikRes.status === 'fulfilled')   setUrnikAll(urnikRes.value.data || []);
+        if (voznikiRes.status === 'fulfilled') setTotalVozniki((voznikiRes.value.data || []).length);
+        if (tahRes.status === 'fulfilled')     setDashTahData(tahRes.value.data || []);
       } catch {
-        setStatistics({ totalHours: 0, totalKm: 0, activeDrivers: 0, totalDrivers: 0 });
-        setRides(PLACEHOLDER_RIDES);
-        setAlerts(PLACEHOLDER_ALERTS);
       } finally {
         setDashLoading(false);
       }
     };
     load();
   }, []);
+
+  const fmtEurDash = (v) => new Intl.NumberFormat('sl-SI', { style: 'currency', currency: 'EUR' }).format(v ?? 0);
+
+  const recentPrevozi = useMemo(() => {
+    const curMonth = new Date().toISOString().slice(0, 7);
+    return [...urnikAll]
+      .filter(u => new Date(u.datum).toISOString().slice(0, 7) === curMonth)
+      .sort((a, b) => new Date(b.datum) - new Date(a.datum));
+  }, [urnikAll]);
+
+  const neplacaniAlerts = useMemo(() =>
+    urnikAll
+      .filter(u => !u.placano && u.cena != null && u.cena > 0)
+      .sort((a, b) => new Date(b.datum) - new Date(a.datum)),
+    [urnikAll]);
+
+  const complianceAlerts = useMemo(() => {
+    const map = {};
+    dashTahData.filter(z => z.stanje === 'VOZNJA').forEach(z => {
+      const k = z.fk_uporabnik;
+      const name = z.uporabnik ? `${z.uporabnik.ime} ${z.uporabnik.priimek}` : `ID ${k}`;
+      const day = new Date(z.zacetek).toISOString().slice(0, 10);
+      if (!map[k]) map[k] = { name, days: {} };
+      map[k].days[day] = (map[k].days[day] || 0) + (z.trajanje_min ?? 0);
+    });
+    const alerts = [];
+    Object.values(map).forEach(({ name, days }) => {
+      Object.entries(days).forEach(([date, mins]) => {
+        if (mins > 9 * 60) {
+          alerts.push({
+            name,
+            date: new Date(date).toLocaleDateString('sl-SI', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+            ure: Math.round(mins / 60 * 10) / 10,
+          });
+        }
+      });
+    });
+    return alerts.sort((a, b) => a.name.localeCompare(b.name));
+  }, [dashTahData]);
+
+  const todayPrevozi = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10);
+    return [...urnikAll]
+      .filter(u => new Date(u.datum).toISOString().slice(0, 10) === today)
+      .sort((a, b) => new Date(a.datum) - new Date(b.datum));
+  }, [urnikAll]);
 
   useEffect(() => {
     const fetch = async () => {
@@ -1273,48 +1315,101 @@ export default function Dashboard() {
 
         {activeTab === 'dashboard' && (
           <>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 mb-8">
               <div className="bg-white rounded-lg p-4 sm:p-6 border border-gray-200 shadow-sm">
                 <div className="flex items-start justify-between mb-2">
-                  <p className="text-gray-600 text-xs font-semibold uppercase tracking-wide">Skupne ure</p>
+                  <p className="text-gray-600 text-xs font-semibold uppercase tracking-wide">Skupne ure — ta mesec</p>
                   <div className="w-10 h-10 bg-blue-100 rounded-lg flex items-center justify-center flex-shrink-0">
                     <span className="material-symbols-outlined text-blue-600 text-sm">schedule</span>
                   </div>
                 </div>
-                <div className="flex items-end gap-3 mb-3">
-                  <p className="text-2xl sm:text-3xl font-bold text-gray-900">
-                    {ureLoading ? '…' : skupneUre !== null ? skupneUre.toLocaleString('sl-SI') : '—'}
-                  </p>
-                  <p className="text-sm text-gray-500 mb-1">h (delo + vožnja)</p>
-                </div>
-                <input
-                  type="month"
-                  value={selectedMonthUre}
-                  onChange={(e) => setSelectedMonthUre(e.target.value)}
-                  className="w-full px-2 py-1.5 border border-gray-200 rounded-lg text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
+                <p className="text-2xl sm:text-3xl font-bold text-gray-900">
+                  {ureLoading ? '…' : skupneUre !== null ? skupneUre.toLocaleString('sl-SI') : '—'}
+                </p>
+                <p className="text-sm text-gray-500 mt-1">h (delo + vožnja)</p>
               </div>
-              <StatCard label="Skupni kilometri" value={statistics.totalKm.toLocaleString()}      unit="km"       iconName="route"    bgColor="bg-orange-100" iconColor="text-orange-600" trend="↑ 5.6%"                                 />
-              <StatCard label="Vozniki v bazi"   value={statistics.totalDrivers.toLocaleString()} unit="voznikov" iconName="group"    bgColor="bg-green-100"  iconColor="text-green-600"  trend={`${statistics.activeDrivers} aktivnih`} />
+              <StatCard label="Vozniki v bazi" value={totalVozniki.toLocaleString()} unit="voznikov" iconName="group" bgColor="bg-green-100" iconColor="text-green-600" />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 mb-8">
+              {/* ── Danes na sporedu ── */}
+              <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-4 sm:p-6 shadow-sm">
+                <h2 className="text-base sm:text-lg font-bold text-gray-900 mb-4">Danes na sporedu</h2>
+                {todayPrevozi.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2">
+                    <span className="material-symbols-outlined text-3xl">event_available</span>
+                    <p className="text-sm">Za danes ni načrtovanih prevozov.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {todayPrevozi.map(u => (
+                      <div key={u.id_urnik} className="flex items-center gap-4 p-3 rounded-lg border border-gray-100 hover:bg-gray-50">
+                        <div className="flex-shrink-0 text-center w-12">
+                          <p className="text-xs text-gray-400">ura</p>
+                          <p className="text-sm font-bold text-gray-800">
+                            {new Date(u.datum).toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-semibold text-gray-900 truncate">{u.stranka?.naziv ?? '—'}</p>
+                          <p className="text-xs text-gray-500 truncate">{u.naziv ?? ''}{u.vozilo ? ` · ${u.vozilo.registerska}` : ''}</p>
+                        </div>
+                        <div className="flex-shrink-0 text-right">
+                          <p className="text-xs text-gray-600">{u.uporabnik ? `${u.uporabnik.ime} ${u.uporabnik.priimek}` : '—'}</p>
+                          {u.cena != null && (
+                            <p className="text-xs font-semibold text-gray-800">
+                              {new Intl.NumberFormat('sl-SI', { style: 'currency', currency: 'EUR' }).format(u.cena)}
+                            </p>
+                          )}
+                        </div>
+                        <span className={`flex-shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                          u.placano ? 'bg-emerald-50 text-emerald-700' : 'bg-amber-50 text-amber-700'
+                        }`}>
+                          {u.placano ? 'Plačano' : 'Neplačano'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Opozorila ── */}
+              <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 shadow-sm">
+                <h2 className="text-base sm:text-lg font-bold text-gray-900 mb-4">Opozorila</h2>
+                {complianceAlerts.length === 0 && neplacaniAlerts.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-40 text-gray-400 gap-2">
+                    <span className="material-symbols-outlined text-3xl">check_circle</span>
+                    <p className="text-sm">Ni opozoril.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-96 overflow-y-auto pr-1">
+                    {complianceAlerts.map((a, i) => (
+                      <div key={i} className="flex gap-3 p-3 rounded-lg bg-red-50 border border-red-200">
+                        <span className="material-symbols-outlined text-red-600 text-[18px] shrink-0 mt-0.5">warning</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-red-900">Prekoračitev dnevne meje vožnje</p>
+                          <p className="text-xs text-red-700 mt-0.5">{a.name} — {a.ure}h dne {a.date}</p>
+                        </div>
+                      </div>
+                    ))}
+                    {neplacaniAlerts.map(u => (
+                      <div key={u.id_urnik} className="flex gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+                        <span className="material-symbols-outlined text-amber-600 text-[18px] shrink-0 mt-0.5">payments</span>
+                        <div className="min-w-0">
+                          <p className="text-sm font-semibold text-amber-900">Neplačani prevoz</p>
+                          <p className="text-xs text-amber-800 mt-0.5">{u.stranka?.naziv ?? '—'} se mora plačati {fmtEurDash(u.cena)}</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
 
             <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-8 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-                <div>
-                  <h2 className="text-base sm:text-lg font-bold text-gray-900">Aktivnost vozil</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">Dnevne ure dela in vožnje po vozilu (DELO + VOZNJA)</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="month"
-                    value={selectedMonthVozila}
-                    onChange={(e) => setSelectedMonthVozila(e.target.value)}
-                    className="px-3 py-1.5 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                  {vozilaLoading && (
-                    <span className="material-symbols-outlined animate-spin text-[18px] text-blue-400">sync</span>
-                  )}
-                </div>
+              <div className="mb-4">
+                <h2 className="text-base sm:text-lg font-bold text-gray-900">Aktivnost vozil — ta mesec</h2>
+                <p className="text-xs text-gray-500 mt-0.5">Dnevne ure dela in vožnje po vozilu (DELO + VOZNJA)</p>
               </div>
 
               <div className="w-full h-64 sm:h-72 bg-white rounded-lg border border-gray-100 p-2">
@@ -1333,106 +1428,52 @@ export default function Dashboard() {
               )}
             </div>
 
-            <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-8 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 mb-6">
-                <h2 className="text-base sm:text-lg font-bold text-gray-900">Detaljni pregled vozil</h2>
-                <a href="#" className="text-blue-600 text-xs sm:text-sm font-semibold hover:underline">Izvozi poročilo (CSV)</a>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs sm:text-sm">
-                  <thead className="bg-gray-100 border-b border-gray-200">
-                    <tr>
-                      {['Registracija','Voznik','Prevoženo','Ure vožnje','Poraba','Status','Akcije'].map((h, i) => (
-                        <th key={h} className={`px-3 sm:px-4 py-3 text-left text-xs font-semibold text-gray-700 whitespace-nowrap ${
-                          i === 1 ? 'hidden sm:table-cell' : i === 3 ? 'hidden md:table-cell' : i === 4 ? 'hidden lg:table-cell' : ''
-                        }`}>{h.toUpperCase()}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rides.map(ride => (
-                      <tr key={ride.id} className="border-b border-gray-200 hover:bg-gray-50">
-                        <td className="px-3 sm:px-4 py-3 sm:py-4 text-xs sm:text-sm font-semibold text-gray-900 whitespace-nowrap">{ride.id}</td>
-                        <td className="px-3 sm:px-4 py-3 sm:py-4 hidden sm:table-cell">
-                          <div className="flex items-center gap-2">
-                            <div className="w-6 h-6 sm:w-8 sm:h-8 bg-blue-100 rounded-full flex items-center justify-center text-xs font-bold text-blue-600 flex-shrink-0">
-                              {ride.driver.charAt(0)}
-                            </div>
-                            <span className="text-gray-900 truncate text-xs sm:text-sm">{ride.driver}</span>
-                          </div>
-                        </td>
-                        <td className="px-3 sm:px-4 py-3 sm:py-4 text-gray-900 whitespace-nowrap">{ride.km} km</td>
-                        <td className="px-3 sm:px-4 py-3 sm:py-4 text-gray-600 hidden md:table-cell whitespace-nowrap">{ride.hours}</td>
-                        <td className="px-3 sm:px-4 py-3 sm:py-4 hidden lg:table-cell whitespace-nowrap">
-                          <span className="text-orange-600 font-semibold">{ride.consumption}</span>
-                        </td>
-                        <td className="px-3 sm:px-4 py-3 sm:py-4">
-                          <span className={`inline-flex items-center gap-1 px-2 sm:px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
-                            ride.status === 'voznji' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-700'
-                          }`}>
-                            <span className="w-2 h-2 bg-current rounded-full"></span>
-                            <span className="hidden sm:inline">{ride.status}</span>
-                          </span>
-                        </td>
-                        <td className="px-3 sm:px-4 py-3 sm:py-4">
-                          <button className="p-1 hover:bg-gray-200 rounded">
-                            <span className="material-symbols-outlined text-sm">more_vert</span>
-                          </button>
-                        </td>
+            {/* ── Zadnji prevozi ── */}
+            <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 mb-6 shadow-sm">
+              <h2 className="text-base sm:text-lg font-bold text-gray-900 mb-4">Prevozi ta mesec</h2>
+              {recentPrevozi.length === 0 ? (
+                <p className="text-sm text-gray-400 text-center py-6">Ni prevozov ta mesec.</p>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs sm:text-sm">
+                    <thead className="bg-gray-50 border-b border-gray-200">
+                      <tr>
+                        {['Datum', 'Stranka', 'Voznik', 'Vozilo', 'Relacija', 'Cena', 'Status'].map(h => (
+                          <th key={h} className="px-3 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wide whitespace-nowrap">{h}</th>
+                        ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {recentPrevozi.map(u => (
+                        <tr key={u.id_urnik} className="border-b border-gray-100 hover:bg-gray-50">
+                          <td className="px-3 py-3 text-gray-700 whitespace-nowrap">
+                            {new Date(u.datum).toLocaleDateString('sl-SI', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                          </td>
+                          <td className="px-3 py-3 font-medium text-gray-900 max-w-[140px] truncate">{u.stranka?.naziv ?? '—'}</td>
+                          <td className="px-3 py-3 text-gray-700 whitespace-nowrap">
+                            {u.uporabnik ? `${u.uporabnik.ime} ${u.uporabnik.priimek}` : '—'}
+                          </td>
+                          <td className="px-3 py-3 text-gray-700 whitespace-nowrap">{u.vozilo?.registerska ?? '—'}</td>
+                          <td className="px-3 py-3 text-gray-500 max-w-[160px] truncate">{u.naziv ?? '—'}</td>
+                          <td className="px-3 py-3 font-semibold text-gray-800 whitespace-nowrap">
+                            {u.cena != null ? new Intl.NumberFormat('sl-SI', { style: 'currency', currency: 'EUR' }).format(u.cena) : '—'}
+                          </td>
+                          <td className="px-3 py-3">
+                            <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${
+                              u.placano ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-600'
+                            }`}>
+                              <span className="material-symbols-outlined text-[12px]">{u.placano ? 'check_circle' : 'radio_button_unchecked'}</span>
+                              {u.placano ? 'Plačano' : 'Neplačano'}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6">
-              <div className="lg:col-span-2 bg-white rounded-lg border border-gray-200 p-4 sm:p-6 shadow-sm">
-                <div className="flex justify-between items-center mb-4">
-                  <h2 className="text-base sm:text-lg font-bold text-gray-900">Lokacije vozil</h2>
-                  <button
-                    onClick={() => setActiveTab('routes')}
-                    className="text-blue-600 text-xs font-semibold hover:underline flex items-center gap-1"
-                  >
-                    <span className="material-symbols-outlined text-sm">open_in_full</span>
-                    Odpri poti
-                  </button>
-                </div>
-                <div className="h-64 sm:h-80 rounded-lg border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center px-4 text-center">
-                  <div>
-                    <p className="text-sm font-semibold text-gray-700">Zemljevid se naloži šele po izbiri poti</p>
-                    <p className="text-xs text-gray-500 mt-1">Odpri zavihek Prikaz poti, izberi datum in klikni relacijo.</p>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6 shadow-sm">
-                <h2 className="text-base sm:text-lg font-bold text-gray-900 mb-6">Zadnja opozorila</h2>
-                <div className="space-y-3 sm:space-y-4">
-                  {alerts.map(alert => (
-                    <div key={alert.id} className={`p-3 sm:p-4 rounded-lg border ${
-                      alert.type === 'warning' ? 'bg-red-50 border-red-200' :
-                      alert.type === 'info'    ? 'bg-yellow-50 border-yellow-200' :
-                                                 'bg-green-50 border-green-200'
-                    }`}>
-                      <div className="flex gap-2 sm:gap-3">
-                        <span className={`material-symbols-outlined flex-shrink-0 text-sm sm:text-base ${
-                          alert.type === 'warning' ? 'text-red-600' :
-                          alert.type === 'info'    ? 'text-yellow-600' : 'text-green-600'
-                        }`}>{alert.icon}</span>
-                        <div>
-                          <p className="font-semibold text-xs sm:text-sm text-gray-900">{alert.title}</p>
-                          <p className="text-xs text-gray-600 mt-1">{alert.description}</p>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-                <button className="w-full mt-6 py-2 text-blue-600 text-xs sm:text-sm font-semibold hover:bg-blue-50 rounded-lg">
-                  Preglej vsa opozorila
-                </button>
-              </div>
-            </div>
           </>
         )}
 
