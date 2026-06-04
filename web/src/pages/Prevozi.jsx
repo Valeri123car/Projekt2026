@@ -14,53 +14,68 @@ const formatCena = (v) => {
   return new Intl.NumberFormat('sl-SI', { style: 'currency', currency: 'EUR' }).format(v);
 };
 
-// Extract just the date part "YYYY-MM-DD" from a DateTime value
 const toInputDate = (v) => {
   if (!v) return '';
   const d = new Date(v);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 };
 
-// Extract just the time part "HH:MM" from a DateTime value
 const toInputTime = (v) => {
   if (!v) return '08:00';
   const d = new Date(v);
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
-// Combine date string "YYYY-MM-DD" + time string "HH:MM" into an ISO string
 const combineDatumUra = (date, time) => {
   if (!date) return null;
   const [h, m] = (time || '08:00').split(':');
   return `${date}T${h.padStart(2, '0')}:${m.padStart(2, '0')}:00`;
 };
 
+// ── Validacija obrazca ────────────────────────────────────────────────────────
+function validatePrevozForm({ datum, selectedVozilo, selectedVoznik, newStranka, strankaForm, selectedStranka }) {
+  if (!datum) return 'Datum je obvezen.';
+  if (!selectedVozilo) return 'Izberite vozilo.';
+  if (!selectedVoznik) return 'Izberite voznika.';
+  if (newStranka && !strankaForm.naziv.trim()) return 'Naziv stranke je obvezen.';
+  if (!newStranka && !selectedStranka) return 'Izberite ali ustvarite stranko.';
+  return null;
+}
+
+// ── Ustvari novo stranko in vrni njen ID ──────────────────────────────────────
+async function ustvariStranko(strankaForm) {
+  const res = await api.post('/admin/stranke', {
+    naziv:      strankaForm.naziv,
+    email:      strankaForm.email || undefined,
+    telefonska: strankaForm.telefonska || undefined,
+    davcna_st:  strankaForm.davcna_st ? parseInt(strankaForm.davcna_st) : undefined,
+  });
+  return String(res.data.id_stranka);
+}
+
 // ─── New/Edit Modal ───────────────────────────────────────────────────────────
 function PrevozModal({ mode, prevoz, onClose, onSaved }) {
   const isEdit = mode === 'edit';
 
-  const [datum, setDatum] = useState(isEdit ? toInputDate(prevoz.datum) : '');
-  const [ura, setUra] = useState(isEdit ? toInputTime(prevoz.datum) : '08:00');
-  const [naziv, setNaziv] = useState(isEdit ? (prevoz.naziv ?? '') : '');
-  const [cena, setCena] = useState(isEdit ? (prevoz.cena ?? '') : '');
-  const [placano, setPlacano] = useState(isEdit ? prevoz.placano : false);
-
-  const [strankeList, setStrankeList] = useState([]);
-  const [selectedStranka, setSelectedStranka] = useState(isEdit ? String(prevoz.fk_stranka) : '');
-  const [newStranka, setNewStranka] = useState(false);
-  const [strankaForm, setStrankaForm] = useState({ naziv: '', email: '', telefonska: '', davcna_st: '' });
-
-  const [vsiVozila, setVsiVozila] = useState([]);
-  const [vsiVozniki, setVsiVozniki] = useState([]);
-  const [selectedVozilo, setSelectedVozilo] = useState(isEdit ? String(prevoz.fk_vozilo) : '');
-  const [selectedVoznik, setSelectedVoznik] = useState(isEdit ? String(prevoz.fk_uporabnik) : '');
-  const [zasedenaVozila, setZasedenaVozila] = useState([]);
-  const [zasedeniVozniki, setZasedeniVozniki] = useState([]);
-  const [availabilityLoaded, setAvailabilityLoaded] = useState(false);
+  const [datum, setDatum]                       = useState(isEdit ? toInputDate(prevoz.datum) : '');
+  const [ura, setUra]                           = useState(isEdit ? toInputTime(prevoz.datum) : '08:00');
+  const [naziv, setNaziv]                       = useState(isEdit ? (prevoz.naziv ?? '') : '');
+  const [cena, setCena]                         = useState(isEdit ? (prevoz.cena ?? '') : '');
+  const [placano, setPlacano]                   = useState(isEdit ? prevoz.placano : false);
+  const [strankeList, setStrankeList]           = useState([]);
+  const [selectedStranka, setSelectedStranka]   = useState(isEdit ? String(prevoz.fk_stranka) : '');
+  const [newStranka, setNewStranka]             = useState(false);
+  const [strankaForm, setStrankaForm]           = useState({ naziv: '', email: '', telefonska: '', davcna_st: '' });
+  const [vsiVozila, setVsiVozila]               = useState([]);
+  const [vsiVozniki, setVsiVozniki]             = useState([]);
+  const [selectedVozilo, setSelectedVozilo]     = useState(isEdit ? String(prevoz.fk_vozilo) : '');
+  const [selectedVoznik, setSelectedVoznik]     = useState(isEdit ? String(prevoz.fk_uporabnik) : '');
+  const [zasedenaVozila, setZasedenaVozila]     = useState([]);
+  const [zasedeniVozniki, setZasedeniVozniki]   = useState([]);
+  const [availabilityLoaded, setAvailabilityLoaded]   = useState(false);
   const [availabilityLoading, setAvailabilityLoading] = useState(false);
-
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+  const [saving, setSaving]                     = useState(false);
+  const [error, setError]                       = useState(null);
 
   useEffect(() => {
     const load = async () => {
@@ -110,39 +125,30 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
 
   const handleSubmit = async () => {
     setError(null);
-    if (!datum) return setError('Datum je obvezen.');
-    if (!selectedVozilo) return setError('Izberite vozilo.');
-    if (!selectedVoznik) return setError('Izberite voznika.');
+
+    const validErr = validatePrevozForm({ datum, selectedVozilo, selectedVoznik, newStranka, strankaForm, selectedStranka });
+    if (validErr) return setError(validErr);
 
     let strankaId = selectedStranka;
 
     if (newStranka) {
-      if (!strankaForm.naziv.trim()) return setError('Naziv stranke je obvezen.');
       try {
-        const res = await api.post('/admin/stranke', {
-          naziv: strankaForm.naziv,
-          email: strankaForm.email || undefined,
-          telefonska: strankaForm.telefonska || undefined,
-          davcna_st: strankaForm.davcna_st ? parseInt(strankaForm.davcna_st) : undefined,
-        });
-        strankaId = String(res.data.id_stranka);
+        strankaId = await ustvariStranko(strankaForm);
       } catch (e) {
         return setError(e.response?.data?.error || 'Napaka pri ustvarjanju stranke.');
       }
     }
 
-    if (!strankaId) return setError('Izberite ali ustvarite stranko.');
-
     try {
       setSaving(true);
       const body = {
-        datum: combineDatumUra(datum, ura),
-        naziv: naziv || undefined,
-        cena: cena !== '' ? parseFloat(cena) : undefined,
+        datum:         combineDatumUra(datum, ura),
+        naziv:         naziv || undefined,
+        cena:          cena !== '' ? parseFloat(cena) : undefined,
         placano,
-        fk_vozilo: parseInt(selectedVozilo),
-        fk_uporabnik: parseInt(selectedVoznik),
-        fk_stranka: parseInt(strankaId),
+        fk_vozilo:     parseInt(selectedVozilo),
+        fk_uporabnik:  parseInt(selectedVoznik),
+        fk_stranka:    parseInt(strankaId),
       };
       if (isEdit) {
         await api.put(`/admin/urnik/${prevoz.id_urnik}`, body);
@@ -160,7 +166,6 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
   return (
     <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto">
       <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl my-8">
-        {/* Header */}
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 sticky top-0 bg-white rounded-t-2xl z-10">
           <div className="flex items-center gap-3">
             <span className="material-symbols-outlined rounded-lg bg-blue-50 p-2 text-blue-600">
@@ -183,7 +188,6 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
           )}
 
-          {/* Datum + Ura */}
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Datum in čas odhoda</p>
             <div className="grid grid-cols-2 gap-3">
@@ -213,7 +217,6 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
             </div>
           </div>
 
-          {/* Stranka */}
           <div>
             <div className="mb-2 flex items-center justify-between">
               <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Stranka</p>
@@ -268,118 +271,80 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
             )}
           </div>
 
-          {/* Vozilo */}
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Vozilo</p>
-              {datum && availabilityLoaded && (
-                <span className="text-[11px] text-slate-400">
-                  {vsiVozila.filter((v) => !zasedenaVozila.includes(v.id_vozilo)).length} prostih za ta dan
-                </span>
-              )}
-            </div>
-            {!datum ? (
-              <div className="rounded-lg border border-dashed border-slate-300 px-4 py-3 text-center text-xs text-slate-400">
-                Najprej izberite datum
-              </div>
-            ) : availabilityLoading ? (
-              <div className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                <span className="material-symbols-outlined animate-spin text-[18px] text-blue-500">sync</span>
-                Nalagam razpoložljivost…
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                {vsiVozila.map((v) => {
-                  const zasedeno = zasedenaVozila.includes(v.id_vozilo);
-                  const selected = selectedVozilo === String(v.id_vozilo);
-                  return (
-                    <button
-                      key={v.id_vozilo}
-                      type="button"
-                      disabled={zasedeno}
-                      onClick={() => !zasedeno && setSelectedVozilo(String(v.id_vozilo))}
-                      className={`w-full flex items-center justify-between rounded-lg border px-4 py-2.5 text-sm text-left transition-colors ${
-                        zasedeno
-                          ? 'border-slate-200 bg-slate-50 opacity-40 cursor-not-allowed'
-                          : selected
-                          ? 'border-blue-500 bg-blue-50 text-blue-800'
-                          : 'border-slate-300 bg-white hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className={`material-symbols-outlined text-[18px] ${selected ? 'text-blue-600' : 'text-slate-400'}`}>directions_bus</span>
-                        <div>
-                          <p className="font-medium">{v.registerska}</p>
-                          <p className="text-[11px] text-slate-500">{v.tip_vozila?.naziv ?? '—'} · {v.st_sedezev} sedežev</p>
-                        </div>
-                      </div>
-                      {zasedeno
-                        ? <span className="text-[11px] font-semibold text-red-400">ZASEDENO</span>
-                        : selected
-                        ? <span className="material-symbols-outlined text-[18px] text-blue-600">check_circle</span>
-                        : null}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+          {['vozilo', 'voznik'].map((tip) => {
+            const jeVozilo       = tip === 'vozilo';
+            const seznam         = jeVozilo ? vsiVozila : vsiVozniki;
+            const zasedeni       = jeVozilo ? zasedenaVozila : zasedeniVozniki;
+            const selected       = jeVozilo ? selectedVozilo : selectedVoznik;
+            const setSelected    = jeVozilo ? setSelectedVozilo : setSelectedVoznik;
+            const idKey          = jeVozilo ? 'id_vozilo' : 'id_uporabnik';
+            const labelFn        = jeVozilo
+              ? (v) => v.registerska
+              : (v) => `${v.ime} ${v.priimek}`;
+            const subLabelFn     = jeVozilo
+              ? (v) => `${v.tip_vozila?.naziv ?? '—'} · ${v.st_sedezev} sedežev`
+              : null;
+            const ikona          = jeVozilo ? 'directions_bus' : 'person';
+            const naslov         = jeVozilo ? 'Vozilo' : 'Voznik';
+            const prostihCount   = seznam.filter((v) => !zasedeni.includes(v[idKey])).length;
 
-          {/* Voznik */}
-          <div>
-            <div className="mb-2 flex items-center justify-between">
-              <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">Voznik</p>
-              {datum && availabilityLoaded && (
-                <span className="text-[11px] text-slate-400">
-                  {vsiVozniki.filter((v) => !zasedeniVozniki.includes(v.id_uporabnik)).length} prostih za ta dan
-                </span>
-              )}
-            </div>
-            {!datum ? (
-              <div className="rounded-lg border border-dashed border-slate-300 px-4 py-3 text-center text-xs text-slate-400">
-                Najprej izberite datum
+            return (
+              <div key={tip}>
+                <div className="mb-2 flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-400">{naslov}</p>
+                  {datum && availabilityLoaded && (
+                    <span className="text-[11px] text-slate-400">{prostihCount} prostih za ta dan</span>
+                  )}
+                </div>
+                {!datum ? (
+                  <div className="rounded-lg border border-dashed border-slate-300 px-4 py-3 text-center text-xs text-slate-400">
+                    Najprej izberite datum
+                  </div>
+                ) : availabilityLoading ? (
+                  <div className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
+                    <span className="material-symbols-outlined animate-spin text-[18px] text-blue-500">sync</span>
+                    Nalagam razpoložljivost…
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
+                    {seznam.map((v) => {
+                      const zasedeno  = zasedeni.includes(v[idKey]);
+                      const isSelected = selected === String(v[idKey]);
+                      return (
+                        <button
+                          key={v[idKey]}
+                          type="button"
+                          disabled={zasedeno}
+                          onClick={() => !zasedeno && setSelected(String(v[idKey]))}
+                          className={`w-full flex items-center justify-between rounded-lg border px-4 py-2.5 text-sm text-left transition-colors ${
+                            zasedeno
+                              ? 'border-slate-200 bg-slate-50 opacity-40 cursor-not-allowed'
+                              : isSelected
+                              ? 'border-blue-500 bg-blue-50 text-blue-800'
+                              : 'border-slate-300 bg-white hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className={`material-symbols-outlined text-[18px] ${isSelected ? 'text-blue-600' : 'text-slate-400'}`}>{ikona}</span>
+                            <div>
+                              <p className="font-medium">{labelFn(v)}</p>
+                              {subLabelFn && <p className="text-[11px] text-slate-500">{subLabelFn(v)}</p>}
+                            </div>
+                          </div>
+                          {zasedeno
+                            ? <span className="text-[11px] font-semibold text-red-400">ZASEDENO</span>
+                            : isSelected
+                            ? <span className="material-symbols-outlined text-[18px] text-blue-600">check_circle</span>
+                            : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
-            ) : availabilityLoading ? (
-              <div className="flex items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 px-4 py-4 text-sm text-slate-500">
-                <span className="material-symbols-outlined animate-spin text-[18px] text-blue-500">sync</span>
-                Nalagam razpoložljivost…
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-52 overflow-y-auto pr-1">
-                {vsiVozniki.map((v) => {
-                  const zasedeno = zasedeniVozniki.includes(v.id_uporabnik);
-                  const selected = selectedVoznik === String(v.id_uporabnik);
-                  return (
-                    <button
-                      key={v.id_uporabnik}
-                      type="button"
-                      disabled={zasedeno}
-                      onClick={() => !zasedeno && setSelectedVoznik(String(v.id_uporabnik))}
-                      className={`w-full flex items-center justify-between rounded-lg border px-4 py-2.5 text-sm text-left transition-colors ${
-                        zasedeno
-                          ? 'border-slate-200 bg-slate-50 opacity-40 cursor-not-allowed'
-                          : selected
-                          ? 'border-blue-500 bg-blue-50 text-blue-800'
-                          : 'border-slate-300 bg-white hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2">
-                        <span className={`material-symbols-outlined text-[18px] ${selected ? 'text-blue-600' : 'text-slate-400'}`}>person</span>
-                        <p className="font-medium">{v.ime} {v.priimek}</p>
-                      </div>
-                      {zasedeno
-                        ? <span className="text-[11px] font-semibold text-red-400">ZASEDENO</span>
-                        : selected
-                        ? <span className="material-symbols-outlined text-[18px] text-blue-600">check_circle</span>
-                        : null}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
+            );
+          })}
 
-          {/* Naziv + Cena + Placano */}
           <div>
             <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-400">Dodatne informacije</p>
             <div className="space-y-3">
@@ -397,10 +362,7 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
                 <div>
                   <label className="mb-1 block text-xs font-medium text-slate-600">Cena (€)</label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={cena}
+                    type="number" min="0" step="0.01" value={cena}
                     onChange={(e) => setCena(e.target.value)}
                     placeholder="0.00"
                     className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -409,8 +371,7 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
                 <div className="pb-2">
                   <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
                     <input
-                      type="checkbox"
-                      checked={placano}
+                      type="checkbox" checked={placano}
                       onChange={(e) => setPlacano(e.target.checked)}
                       className="h-4 w-4 rounded border-slate-300 accent-blue-600"
                     />
@@ -422,15 +383,12 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
           </div>
         </div>
 
-        {/* Footer */}
         <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4 sticky bottom-0 bg-white rounded-b-2xl">
           <button type="button" onClick={onClose} className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
             Prekliči
           </button>
           <button
-            type="button"
-            onClick={handleSubmit}
-            disabled={saving}
+            type="button" onClick={handleSubmit} disabled={saving}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-60"
           >
             <span className="material-symbols-outlined text-[16px]">save</span>
@@ -445,7 +403,7 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
 // ─── Delete Modal ─────────────────────────────────────────────────────────────
 function DeleteModal({ prevoz, onClose, onDeleted }) {
   const [deleting, setDeleting] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError]       = useState(null);
 
   const handleDelete = async () => {
     try {
@@ -488,16 +446,16 @@ function DeleteModal({ prevoz, onClose, onDeleted }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Prevozi() {
-  const [urnik, setUrnik] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [urnik, setUrnik]               = useState([]);
+  const [loading, setLoading]           = useState(true);
+  const [error, setError]               = useState(null);
+  const [currentPage, setCurrentPage]   = useState(1);
+  const [searchQuery, setSearchQuery]   = useState('');
   const [filterPlacano, setFilterPlacano] = useState('vse');
-  const [sortField, setSortField] = useState('datum');
-  const [sortDir, setSortDir] = useState('desc');
-  const [modal, setModal] = useState(null);
-  const [togglingId, setTogglingId] = useState(null);
+  const [sortField, setSortField]       = useState('datum');
+  const [sortDir, setSortDir]           = useState('desc');
+  const [modal, setModal]               = useState(null);
+  const [togglingId, setTogglingId]     = useState(null);
 
   const fetchUrnik = async () => {
     try {
@@ -539,6 +497,14 @@ export default function Prevozi() {
     return <span className="material-symbols-outlined text-[14px] text-blue-600">{sortDir === 'asc' ? 'arrow_upward' : 'arrow_downward'}</span>;
   };
 
+  const getSortValues = (a, b) => {
+    if (sortField === 'datum')   return [new Date(a.datum), new Date(b.datum)];
+    if (sortField === 'stranka') return [a.stranka?.naziv ?? '', b.stranka?.naziv ?? ''];
+    if (sortField === 'cena')    return [a.cena ?? -1, b.cena ?? -1];
+    if (sortField === 'voznik')  return [a.uporabnik?.priimek ?? '', b.uporabnik?.priimek ?? ''];
+    return [a[sortField] ?? '', b[sortField] ?? ''];
+  };
+
   const filtered = useMemo(() => {
     let data = [...urnik];
     if (searchQuery) {
@@ -550,15 +516,10 @@ export default function Prevozi() {
         (`${u.uporabnik?.ime ?? ''} ${u.uporabnik?.priimek ?? ''}`).toLowerCase().includes(q)
       );
     }
-    if (filterPlacano === 'placano') data = data.filter((u) => u.placano);
+    if (filterPlacano === 'placano')   data = data.filter((u) => u.placano);
     if (filterPlacano === 'neplacano') data = data.filter((u) => !u.placano);
     data.sort((a, b) => {
-      let av, bv;
-      if (sortField === 'datum')        { av = new Date(a.datum); bv = new Date(b.datum); }
-      else if (sortField === 'stranka') { av = a.stranka?.naziv ?? ''; bv = b.stranka?.naziv ?? ''; }
-      else if (sortField === 'cena')    { av = a.cena ?? -1; bv = b.cena ?? -1; }
-      else if (sortField === 'voznik')  { av = a.uporabnik?.priimek ?? ''; bv = b.uporabnik?.priimek ?? ''; }
-      else { av = a[sortField] ?? ''; bv = b[sortField] ?? ''; }
+      const [av, bv] = getSortValues(a, b);
       if (av < bv) return sortDir === 'asc' ? -1 : 1;
       if (av > bv) return sortDir === 'asc' ? 1 : -1;
       return 0;
@@ -567,15 +528,14 @@ export default function Prevozi() {
   }, [urnik, searchQuery, filterPlacano, sortField, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
-  const paginated = useMemo(() => {
+  const paginated  = useMemo(() => {
     const start = (currentPage - 1) * ITEMS_PER_PAGE;
     return filtered.slice(start, start + ITEMS_PER_PAGE);
   }, [filtered, currentPage]);
 
-  const startRow = filtered.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
-  const endRow = Math.min(currentPage * ITEMS_PER_PAGE, filtered.length);
-
-  const skupajCena = useMemo(() => urnik.reduce((s, u) => s + (u.cena ?? 0), 0), [urnik]);
+  const startRow     = filtered.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
+  const endRow       = Math.min(currentPage * ITEMS_PER_PAGE, filtered.length);
+  const skupajCena   = useMemo(() => urnik.reduce((s, u) => s + (u.cena ?? 0), 0), [urnik]);
   const placanoCount = useMemo(() => urnik.filter((u) => u.placano).length, [urnik]);
   const neplacanoCount = useMemo(() => urnik.filter((u) => !u.placano).length, [urnik]);
 
@@ -617,39 +577,23 @@ export default function Prevozi() {
           <div className="mb-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
         )}
 
-        {/* Stats */}
         <section className="mb-6 grid grid-cols-2 md:grid-cols-4 gap-4">
-          <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Skupaj prevozov</p>
-            <div className="mt-3 flex items-center gap-3">
-              <span className="material-symbols-outlined rounded-lg bg-blue-50 p-2 text-blue-600">directions_bus</span>
-              <p className="text-2xl font-bold text-slate-900">{urnik.length}</p>
-            </div>
-          </article>
-          <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Plačano</p>
-            <div className="mt-3 flex items-center gap-3">
-              <span className="material-symbols-outlined rounded-lg bg-emerald-50 p-2 text-emerald-600">check_circle</span>
-              <p className="text-2xl font-bold text-slate-900">{placanoCount}</p>
-            </div>
-          </article>
-          <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Neplačano</p>
-            <div className="mt-3 flex items-center gap-3">
-              <span className="material-symbols-outlined rounded-lg bg-red-50 p-2 text-red-500">cancel</span>
-              <p className="text-2xl font-bold text-slate-900">{neplacanoCount}</p>
-            </div>
-          </article>
-          <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Skupaj vrednost</p>
-            <div className="mt-3 flex items-center gap-3">
-              <span className="material-symbols-outlined rounded-lg bg-amber-50 p-2 text-amber-600">euro</span>
-              <p className="text-2xl font-bold text-slate-900">{formatCena(skupajCena)}</p>
-            </div>
-          </article>
+          {[
+            { label: 'Skupaj prevozov', icon: 'directions_bus', color: 'blue',    value: urnik.length },
+            { label: 'Plačano',         icon: 'check_circle',   color: 'emerald', value: placanoCount },
+            { label: 'Neplačano',       icon: 'cancel',         color: 'red',     value: neplacanoCount },
+            { label: 'Skupaj vrednost', icon: 'euro',           color: 'amber',   value: formatCena(skupajCena) },
+          ].map(({ label, icon, color, value }) => (
+            <article key={label} className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</p>
+              <div className="mt-3 flex items-center gap-3">
+                <span className={`material-symbols-outlined rounded-lg bg-${color}-50 p-2 text-${color}-600`}>{icon}</span>
+                <p className="text-2xl font-bold text-slate-900">{value}</p>
+              </div>
+            </article>
+          ))}
         </section>
 
-        {/* Filters */}
         <section className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center">
           <div className="relative flex-1">
             <span className="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-[18px] text-slate-400">search</span>
@@ -668,7 +612,6 @@ export default function Prevozi() {
           </div>
         </section>
 
-        {/* Table */}
         {loading && !urnik.length ? (
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-slate-500 shadow-sm">Nalaganje prevozov…</div>
         ) : filtered.length === 0 ? (
@@ -681,22 +624,14 @@ export default function Prevozi() {
               <table className="w-full min-w-[960px] border-collapse">
                 <thead className="bg-slate-100">
                   <tr className="text-left text-xs font-semibold uppercase tracking-wide text-slate-600">
-                    <th className="px-5 py-4 cursor-pointer hover:text-slate-900" onClick={() => handleSort('datum')}>
-                      <div className="flex items-center gap-1">Datum <SortIcon field="datum" /></div>
-                    </th>
-                    <th className="px-4 py-4 cursor-pointer hover:text-slate-900" onClick={() => handleSort('stranka')}>
-                      <div className="flex items-center gap-1">Stranka <SortIcon field="stranka" /></div>
-                    </th>
-                    <th className="px-4 py-4">Vozilo</th>
-                    <th className="px-4 py-4 cursor-pointer hover:text-slate-900" onClick={() => handleSort('voznik')}>
-                      <div className="flex items-center gap-1">Voznik <SortIcon field="voznik" /></div>
-                    </th>
-                    <th className="px-4 py-4">Relacija</th>
-                    <th className="px-4 py-4 cursor-pointer hover:text-slate-900" onClick={() => handleSort('cena')}>
-                      <div className="flex items-center gap-1">Cena <SortIcon field="cena" /></div>
-                    </th>
-                    <th className="px-4 py-4">Status</th>
-                    <th className="px-5 py-4 text-right">Akcije</th>
+                    {[['datum','Datum'],['stranka','Stranka'],null,['voznik','Voznik'],null,['cena','Cena'],null,null].map((col, i) => (
+                      <th key={i} className={`px-${i === 0 || i === 7 ? 5 : 4} py-4 ${col ? 'cursor-pointer hover:text-slate-900' : ''}`}
+                        onClick={col ? () => handleSort(col[0]) : undefined}>
+                        {col
+                          ? <div className="flex items-center gap-1">{col[1]} <SortIcon field={col[0]} /></div>
+                          : ['Vozilo','Relacija','Status','Akcije'][([0,1,2,3,4,5,6,7].indexOf(i) - 2)]}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
@@ -722,21 +657,15 @@ export default function Prevozi() {
                       <td className="px-4 py-4 text-slate-700">
                         {u.uporabnik ? `${u.uporabnik.ime} ${u.uporabnik.priimek}` : '-'}
                       </td>
-                      <td className="px-4 py-4 text-slate-600 text-sm max-w-[160px] truncate">
-                        {u.naziv || '-'}
-                      </td>
+                      <td className="px-4 py-4 text-slate-600 text-sm max-w-[160px] truncate">{u.naziv || '-'}</td>
                       <td className="px-4 py-4 font-semibold text-slate-800">{formatCena(u.cena)}</td>
                       <td className="px-4 py-4">
-                        <button
-                          type="button"
-                          onClick={() => togglePlacano(u)}
-                          disabled={togglingId === u.id_urnik}
+                        <button type="button" onClick={() => togglePlacano(u)} disabled={togglingId === u.id_urnik}
                           className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold border transition-colors disabled:opacity-60 ${
                             u.placano
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
                               : 'bg-red-50 text-red-600 border-red-200 hover:bg-red-100'
-                          }`}
-                        >
+                          }`}>
                           <span className="material-symbols-outlined text-[14px]">
                             {togglingId === u.id_urnik ? 'sync' : u.placano ? 'check_circle' : 'radio_button_unchecked'}
                           </span>

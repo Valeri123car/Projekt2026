@@ -94,8 +94,43 @@ function formatTrajanje(min) {
   if (!min && min !== 0) return "—";
   const h = Math.floor(min / 60);
   const m = min % 60;
-  if (h === 0) return `${m}min`;
-  return `${h}h ${m}min`;
+  return h === 0 ? `${m}min` : `${h}h ${m}min`;
+}
+
+function mesecniObseg(m) {
+  const od = `${m}-01`;
+  const zadnjiDan = new Date(m.split("-")[0], m.split("-")[1], 0).getDate();
+  const do_ = `${m}-${String(zadnjiDan).padStart(2, "0")}`;
+  return { od, do_ };
+}
+
+function dodajTahografDot(oznaceni, dan, stanje) {
+  if (!oznaceni[dan]) oznaceni[dan] = { marked: true, dots: [] };
+  const barva = BARVE_STANJ[stanje] || "#555";
+  if (!oznaceni[dan].dots.find((d) => d.color === barva)) {
+    oznaceni[dan].dots.push({ color: barva, key: stanje });
+  }
+}
+
+function dodajVoznjaRocnoDot(oznaceni, dan) {
+  if (!oznaceni[dan]) oznaceni[dan] = { marked: true, dots: [] };
+  if (!oznaceni[dan].dots.find((d) => d.key === "ROCNO")) {
+    oznaceni[dan].dots.push({ color: "#2e7d32", key: "ROCNO" });
+  }
+}
+
+function pretвориVoznjoVZapis(v) {
+  return {
+    id_zapis: `voznja_${v.id_voznja}`,
+    stanje: "VOZNJA",
+    zacetek: v.zacetek,
+    konec: v.konc,
+    trajanje_min: Math.round((new Date(v.konc) - new Date(v.zacetek)) / 60000),
+    registrska: v.relacija || null,
+    vir: "ROCNO",
+    stranka: v.stranka,
+    opis: v.opis,
+  };
 }
 
 export default function UrnikScreen() {
@@ -118,10 +153,7 @@ export default function UrnikScreen() {
 
   const naloziMesec = useCallback(async (m) => {
     try {
-      const od = `${m}-01`;
-      const zadnjiDan = new Date(m.split("-")[0], m.split("-")[1], 0).getDate();
-      const do_ = `${m}-${String(zadnjiDan).padStart(2, "0")}`;
-
+      const { od, do_ } = mesecniObseg(m);
       const [tahRes, vozRes] = await Promise.all([
         api.get(`/tahograf/zgodovina?od=${od}&do=${do_}&limit=500`),
         api.get("/voznje"),
@@ -131,20 +163,13 @@ export default function UrnikScreen() {
 
       for (const z of tahRes.data) {
         const dan = new Date(z.zacetek).toISOString().split("T")[0];
-        if (!oznaceni[dan]) oznaceni[dan] = { marked: true, dots: [] };
-        const barva = BARVE_STANJ[z.stanje] || "#555";
-        if (!oznaceni[dan].dots.find((d) => d.color === barva)) {
-          oznaceni[dan].dots.push({ color: barva, key: z.stanje });
-        }
+        dodajTahografDot(oznaceni, dan, z.stanje);
       }
 
       for (const v of vozRes.data) {
         const dan = new Date(v.datum).toISOString().split("T")[0];
         if (dan >= od && dan <= do_) {
-          if (!oznaceni[dan]) oznaceni[dan] = { marked: true, dots: [] };
-          if (!oznaceni[dan].dots.find((d) => d.key === "ROCNO")) {
-            oznaceni[dan].dots.push({ color: "#2e7d32", key: "ROCNO" });
-          }
+          dodajVoznjaRocnoDot(oznaceni, dan);
         }
       }
 
@@ -162,25 +187,11 @@ export default function UrnikScreen() {
         api.get("/voznje"),
       ]);
 
-      const voznjeTaDan = vozRes.data.filter(
-        (v) => new Date(v.datum).toISOString().split("T")[0] === datum,
-      );
+      const voznjeTaDan = vozRes.data
+        .filter((v) => new Date(v.datum).toISOString().split("T")[0] === datum)
+        .map(pretвориVoznjoVZapis);
 
-      const voznjePretvorjene = voznjeTaDan.map((v) => ({
-        id_zapis: `voznja_${v.id_voznja}`,
-        stanje: "VOZNJA",
-        zacetek: v.zacetek,
-        konec: v.konc,
-        trajanje_min: Math.round(
-          (new Date(v.konc) - new Date(v.zacetek)) / 60000,
-        ),
-        registrska: v.relacija || null,
-        vir: "ROCNO",
-        stranka: v.stranka,
-        opis: v.opis,
-      }));
-
-      const vsi = [...tahRes.data, ...voznjePretvorjene].sort(
+      const vsi = [...tahRes.data, ...voznjeTaDan].sort(
         (a, b) => new Date(a.zacetek) - new Date(b.zacetek),
       );
 
@@ -328,8 +339,6 @@ export default function UrnikScreen() {
                 : BARVE_STANJ[zapis.stanje] || "#555";
             const ikona = IKONE_STANJ[zapis.stanje] || "dots-horizontal";
             const label = LABELE_STANJ[zapis.stanje] || zapis.stanje;
-            const casZac = formatCas(zapis.zacetek);
-            const casKon = zapis.konec ? formatCas(zapis.konec) : "...";
 
             return (
               <View
@@ -375,7 +384,8 @@ export default function UrnikScreen() {
                     )}
                   </View>
                   <Text style={s.zapisCas}>
-                    {casZac} — {casKon}
+                    {formatCas(zapis.zacetek)} —{" "}
+                    {zapis.konec ? formatCas(zapis.konec) : "..."}
                   </Text>
                   {zapis.stranka && (
                     <Text style={s.zapisReg}>{zapis.stranka}</Text>
