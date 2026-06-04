@@ -25,6 +25,7 @@
 10. [Deployment](#10-deployment)
 11. [Zagotavljanje kakovosti](#11-zagotavljanje-kakovosti)
 12. [Roadmap in znane omejitve](#12-roadmap-in-znane-omejitve)
+13. [Diagrami aktivnosti](#13-diagrami-aktivnosti)
 ---
  
 ## 1. Pregled sistema
@@ -1013,4 +1014,72 @@ Ker projekt nima implementiranih avtomatiziranih testov, so tukaj predlogi za pr
 - **Refresh token brez rotacije** — trenutni implementacija ne rotira refresh tokenov ob vsaki uporabi, kar zmanjšuje varnost pri kraji tokena.
 - **Ni offline podpore za mobilno** — mobilna aplikacija zahteva aktivno internetno povezavo. Tahografski zapisi se ne shranjujejo lokalno ob izpadu povezave.
 - **EMŠO šifrirni ključ v env** — ključ za AES-256-GCM je shranjen v okoljski spremenljivki, ne v namenski key management rešitvi (npr. HashiCorp Vault, AWS KMS).
+
+---
+
+## 13. Diagrami aktivnosti
+
+### Pregled vožnj
+
+```mermaid
+flowchart TD
+    S([Začetek]) --> A[Uporabnik odpre /voznje]
+    A --> B{Vloga?}
+    B -->|1 Voznik| C[GET /voznje\nfiltrirano po ID-ju iz žetona]
+    B -->|2 Admin / 3 Vodstvo| D[GET /admin/voznje\nvsi vozniki]
+    C --> E[Prikaži tabelo\nbrez stolpca voznik\nbrez uvoza DDD\nbrez izvoza]
+    D --> F[Prikaži polno tabelo\nfilter po vozniku\nuvoz DDD in izvoz\nza Admin in Vodstvo]
+    E --> EN([Konec])
+    F --> EN
+```
+
+---
+
+### Prijava
+
+```mermaid
+flowchart TD
+    S([Začetek]) --> A[Uporabnik odpre /login]
+    A --> B[Vnese e-pošto in geslo]
+    B --> C[POST /auth/login]
+    C --> D{Podatki veljavni?}
+    D -->|Ne| E[Prikaži sporočilo o napaki]
+    E --> B
+    D -->|Da| F[Prejme JWT žeton in vlogo]
+    F --> G[Shrani žeton in vlogo v localStorage]
+    G --> H{Vloga?}
+    H -->|1 Voznik| I[Preusmeri na /voznje]
+    H -->|2 Admin| J[Preusmeri na /]
+    H -->|3 Vodstvo| K[Preusmeri na /]
+    I --> EN([Konec])
+    J --> EN
+    K --> EN
+```
+
+---
+
+### Izvoz delovnega zapisa (Excel)
+
+```mermaid
+flowchart TD
+    S([Začetek]) --> A[Admin/Vodstvo izbere voznike in mesec]
+    A --> B[Klikne Izvozi]
+    B --> C[Prikaži nalagalni krog]
+    C --> D[GET /voznjeMesec/export\nfk_uporabnik + od + do]
+    D --> E[Poizvedba TahografZapis\nza izbrani mesec po vozniku]
+    E --> F[Poizvedba TahografZapis\nzadnjih 16 tednov DELO/VOZNJA\nseštej trajanje_min]
+    F --> G[Sestavi JSON niz izpis]
+    G --> H[Zapiši JSON v začasno datoteko]
+    H --> I[Zaženi json_to_delovni_zapis.py\ninput.json output.xlsx]
+    I --> J{Python uspešen?}
+    J -->|Ne| K[Vrni 500]
+    K --> L[Prikaži opozorilo]
+    L --> EN([Konec])
+    J -->|Da| M[Preberi xlsx v medpomnilnik]
+    M --> N[Izbriši začasne datoteke]
+    N --> O[Pošlji xlsx z glavo\nContent-Disposition: attachment]
+    O --> P[Brskalnik prenese datoteko]
+    P --> Q[Skrij nalagalni krog]
+    Q --> EN
+```
 
