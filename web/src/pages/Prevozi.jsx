@@ -43,29 +43,91 @@ function buildTimestamps(datum, uraZacetek, uraKonec) {
   return { zacetek, konc: `${koncDatum}T${hk.padStart(2, '0')}:${mk.padStart(2, '0')}:00` };
 }
 
-function PrevozModal({ mode, prevoz, onClose, onSaved }) {
-  const isEdit = mode === 'edit';
+function validatePrevoz(datum, selectedVoznik) {
+  if (!datum) return 'Datum je obvezen.';
+  if (!selectedVoznik) return 'Izberite voznika.';
+  return null;
+}
 
-  const [datum, setDatum]                 = useState(isEdit ? toInputDate(prevoz.datum) : '');
-  const [uraZacetek, setUraZacetek]       = useState(isEdit ? toInputTime(prevoz.zacetek) : '08:00');
-  const [uraKonec, setUraKonec]           = useState(isEdit ? toInputTime(prevoz.konc) : '16:00');
-  const [relacija, setRelacija]           = useState(isEdit ? (prevoz.relacija ?? '') : '');
-  const [opis, setOpis]                   = useState(isEdit ? (prevoz.opis ?? '') : '');
-  const [cena, setCena]                   = useState(isEdit ? (prevoz.cena ?? '') : '');
-  const [placano, setPlacano]             = useState(isEdit ? prevoz.placano : false);
-  const [selectedStranka, setSelectedStranka] = useState(isEdit ? String(prevoz.fk_stranka ?? '') : '');
-  const [novaStrankaOpen, setNovaStrankaOpen] = useState(false);
-  const [novaStrankaData, setNovaStrankaData] = useState({ naziv: '', email: '', telefonska: '', davcna_st: '' });
-  const [novaStrankaSaving, setNovaStrankaSaving] = useState(false);
-  const [selectedVozilo, setSelectedVozilo]   = useState(isEdit ? String(prevoz.fk_vozilo ?? '') : '');
-  const [selectedVoznik, setSelectedVoznik]   = useState(isEdit ? String(prevoz.fk_uporabnik ?? '') : '');
-  const [strankeList, setStrankeList]     = useState([]);
-  const [vozilaList, setVozilaList]       = useState([]);
-  const [voznikiList, setVoznikiList]     = useState([]);
+function buildPrevozPayload(fields) {
+  const { datum, uraZacetek, uraKonec, relacija, opis, cena, placano, selectedVozilo, selectedStranka, selectedVoznik } = fields;
+  const { zacetek, konc } = buildTimestamps(datum, uraZacetek, uraKonec);
+  return {
+    datum,
+    zacetek,
+    konc,
+    relacija:     relacija    || undefined,
+    opis:         opis        || undefined,
+    cena:         cena !== '' ? parseFloat(cena) : undefined,
+    placano,
+    fk_vozilo:    selectedVozilo  ? parseInt(selectedVozilo)  : undefined,
+    fk_stranka:   selectedStranka ? parseInt(selectedStranka) : undefined,
+    fk_uporabnik: parseInt(selectedVoznik),
+  };
+}
+
+function getEditInitialState(prevoz) {
+  return {
+    datum:            toInputDate(prevoz.datum),
+    uraZacetek:       toInputTime(prevoz.zacetek),
+    uraKonec:         toInputTime(prevoz.konc),
+    relacija:         prevoz.relacija  ?? '',
+    opis:             prevoz.opis      ?? '',
+    cena:             prevoz.cena      ?? '',
+    placano:          prevoz.placano,
+    selectedStranka:  String(prevoz.fk_stranka   ?? ''),
+    selectedVozilo:   String(prevoz.fk_vozilo    ?? ''),
+    selectedVoznik:   String(prevoz.fk_uporabnik ?? ''),
+  };
+}
+
+const ADD_INITIAL_STATE = {
+  datum: '', uraZacetek: '08:00', uraKonec: '16:00',
+  relacija: '', opis: '', cena: '', placano: false,
+  selectedStranka: '', selectedVozilo: '', selectedVoznik: '',
+};
+
+function useOverlapCheck(datum, uraZacetek, uraKonec, isEdit, prevozId) {
   const [zasedeniVozniki, setZasedeniVozniki] = useState([]);
   const [zasedeniVozila, setZasedeniVozila]   = useState([]);
-  const [saving, setSaving]               = useState(false);
-  const [error, setError]                 = useState(null);
+
+  useEffect(() => {
+    if (!datum) {
+      setZasedeniVozniki([]);
+      setZasedeniVozila([]);
+      return;
+    }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) return;
+
+    const check = async () => {
+      try {
+        const params = new URLSearchParams({ od: datum, do: datum });
+        const res = await api.get(`/admin/voznje?${params.toString()}`);
+        const prevozi = (res.data || []).filter((p) =>
+          isEdit ? p.id_voznja !== prevozId : true
+        );
+        const [hz, mz] = uraZacetek.split(':');
+        const [hk, mk] = uraKonec.split(':');
+        const zacMs  = parseInt(hz) * 60 + parseInt(mz);
+        const koncMs = parseInt(hk) * 60 + parseInt(mk);
+        const newZac  = new Date(`${datum}T${uraZacetek}:00`);
+        const newKonc = new Date(`${datum}T${uraKonec}:00`);
+        if (koncMs <= zacMs) newKonc.setDate(newKonc.getDate() + 1);
+        const overlaps = (p) => new Date(p.zacetek) < newKonc && new Date(p.konc) > newZac;
+        setZasedeniVozniki(prevozi.filter(overlaps).map((p) => p.fk_uporabnik));
+        setZasedeniVozila(prevozi.filter(overlaps).filter((p) => p.fk_vozilo).map((p) => p.fk_vozilo));
+      } catch { /* ignore */ }
+    };
+    check();
+  }, [datum, uraZacetek, uraKonec, isEdit, prevozId]);
+
+  return { zasedeniVozniki, zasedeniVozila };
+}
+
+function useSeznamLists(setError) {
+  const [strankeList, setStrankeList] = useState([]);
+  const [vozilaList, setVozilaList]   = useState([]);
+  const [voznikiList, setVoznikiList] = useState([]);
 
   useEffect(() => {
     const load = async () => {
@@ -85,43 +147,166 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
     load();
   }, []);
 
-  useEffect(() => {
-    if (!datum) { setZasedeniVozniki([]); setZasedeniVozila([]); return; }
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) return;
-    const check = async () => {
-      try {
-        const params = new URLSearchParams({ od: datum, do: datum });
-        const res = await api.get(`/admin/voznje?${params.toString()}`);
-        const prevozi = (res.data || []).filter((p) =>
-          isEdit ? p.id_voznja !== prevoz.id_voznja : true
-        );
-        const [hz, mz] = uraZacetek.split(':');
-        const [hk, mk] = uraKonec.split(':');
-        const zacMs = parseInt(hz) * 60 + parseInt(mz);
-        const koncMs = parseInt(hk) * 60 + parseInt(mk);
-        const newZac = new Date(`${datum}T${uraZacetek}:00`);
-        const newKonc = new Date(`${datum}T${uraKonec}:00`);
-        if (koncMs <= zacMs) newKonc.setDate(newKonc.getDate() + 1);
+  const addStranka = (stranka) => {
+    setStrankeList((prev) => [...prev, stranka].sort((a, b) => a.naziv.localeCompare(b.naziv)));
+  };
 
-        const overlaps = (p) => new Date(p.zacetek) < newKonc && new Date(p.konc) > newZac;
-        setZasedeniVozniki(prevozi.filter(overlaps).map((p) => p.fk_uporabnik));
-        setZasedeniVozila(prevozi.filter(overlaps).filter((p) => p.fk_vozilo).map((p) => p.fk_vozilo));
-      } catch { /* ignore */ }
-    };
-    check();
-  }, [datum, uraZacetek, uraKonec]);
+  return { strankeList, vozilaList, voznikiList, addStranka };
+}
+
+async function saveStranka(data) {
+  const res = await api.post('/admin/stranke', {
+    naziv:      data.naziv.trim(),
+    email:      data.email      || undefined,
+    telefonska: data.telefonska || undefined,
+    davcna_st:  data.davcna_st  ? parseInt(data.davcna_st) : undefined,
+  });
+  return res.data;
+}
+
+async function savePrevoz(isEdit, prevozId, body) {
+  if (isEdit) {
+    await api.put(`/admin/voznje/${prevozId}`, body);
+  } else {
+    await api.post('/admin/voznje/nova', body);
+  }
+}
+
+function getSelectionColorClass(selected, zaseden) {
+  if (selected && zaseden) return 'border-orange-400 bg-orange-50 text-orange-900';
+  if (selected)            return 'border-blue-500 bg-blue-50 text-blue-800';
+  if (zaseden)             return 'border-yellow-300 bg-yellow-50 hover:border-yellow-400';
+  return 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40';
+}
+
+function ZasedenBadge({ selected }) {
+  return (
+    <span className={`ml-2 inline-flex items-center gap-0.5 text-[10px] font-bold ${selected ? 'text-orange-500' : 'text-yellow-600'}`}>
+      <span className="material-symbols-outlined text-[12px]">warning</span>
+      ZASEDEN
+    </span>
+  );
+}
+
+function SelectionGrid({ items, selectedId, zasedeni, onSelect, deselectable, renderItem }) {
+  return (
+    <div className="grid grid-cols-2 gap-1.5 max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2">
+      {items.map((item) => {
+        const id      = String(item.id);
+        const zaseden = zasedeni.includes(item.rawId);
+        const selected = selectedId === id;
+        return (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onSelect(deselectable && selected ? '' : id)}
+            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors ${getSelectionColorClass(selected, zaseden)}`}
+          >
+            {renderItem(item, selected, zaseden)}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function VoznikItem({ item, selected, zaseden }) {
+  return (
+    <>
+      <span className="font-medium">{item.ime} {item.priimek}</span>
+      {zaseden && <ZasedenBadge selected={selected} />}
+      {!zaseden && selected && <span className="material-symbols-outlined text-[16px] text-blue-600">check_circle</span>}
+    </>
+  );
+}
+
+function VoziloItem({ item, selected, zaseden }) {
+  return (
+    <>
+      <div>
+        <p className="font-medium">{item.registerska}</p>
+        {item.tip && <p className="text-[11px] text-slate-500">{item.tip}</p>}
+      </div>
+      {zaseden && <ZasedenBadge selected={selected} />}
+      {!zaseden && selected && <span className="material-symbols-outlined text-[16px] text-blue-600">check_circle</span>}
+    </>
+  );
+}
+
+function NovaStrankaForm({ data, onChange, onSave, saving }) {
+  return (
+    <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-2">
+      <p className="text-xs font-semibold text-blue-700">Nova stranka</p>
+      <input
+        value={data.naziv}
+        onChange={(e) => onChange((d) => ({ ...d, naziv: e.target.value }))}
+        placeholder="Naziv *"
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+      <div className="grid grid-cols-2 gap-2">
+        <input
+          value={data.telefonska}
+          onChange={(e) => onChange((d) => ({ ...d, telefonska: e.target.value }))}
+          placeholder="Telefonska"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+        <input
+          value={data.email}
+          onChange={(e) => onChange((d) => ({ ...d, email: e.target.value }))}
+          placeholder="E-pošta"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+        />
+      </div>
+      <input
+        value={data.davcna_st}
+        onChange={(e) => onChange((d) => ({ ...d, davcna_st: e.target.value }))}
+        placeholder="Davčna številka"
+        type="number"
+        className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      />
+      <button
+        type="button"
+        disabled={saving || !data.naziv.trim()}
+        onClick={onSave}
+        className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60"
+      >
+        {saving ? 'Shranjujem...' : 'Ustvari stranko'}
+      </button>
+    </div>
+  );
+}
+
+function usePrevozModal(mode, prevoz, onSaved) {
+  const isEdit = mode === 'edit';
+  const init   = isEdit ? getEditInitialState(prevoz) : ADD_INITIAL_STATE;
+
+  const [datum, setDatum]                   = useState(init.datum);
+  const [uraZacetek, setUraZacetek]         = useState(init.uraZacetek);
+  const [uraKonec, setUraKonec]             = useState(init.uraKonec);
+  const [relacija, setRelacija]             = useState(init.relacija);
+  const [opis, setOpis]                     = useState(init.opis);
+  const [cena, setCena]                     = useState(init.cena);
+  const [placano, setPlacano]               = useState(init.placano);
+  const [selectedStranka, setSelectedStranka] = useState(init.selectedStranka);
+  const [selectedVozilo, setSelectedVozilo] = useState(init.selectedVozilo);
+  const [selectedVoznik, setSelectedVoznik] = useState(init.selectedVoznik);
+  const [novaStrankaOpen, setNovaStrankaOpen] = useState(false);
+  const [novaStrankaData, setNovaStrankaData] = useState({ naziv: '', email: '', telefonska: '', davcna_st: '' });
+  const [novaStrankaSaving, setNovaStrankaSaving] = useState(false);
+  const [saving, setSaving]                 = useState(false);
+  const [error, setError]                   = useState(null);
+
+  const { zasedeniVozniki, zasedeniVozila } = useOverlapCheck(
+    datum, uraZacetek, uraKonec, isEdit, prevoz?.id_voznja
+  );
+  const { strankeList, vozilaList, voznikiList, addStranka } = useSeznamLists(setError);
 
   const handleSaveNovaStranka = async () => {
     setNovaStrankaSaving(true);
     try {
-      const res = await api.post('/admin/stranke', {
-        naziv: novaStrankaData.naziv.trim(),
-        email: novaStrankaData.email || undefined,
-        telefonska: novaStrankaData.telefonska || undefined,
-        davcna_st: novaStrankaData.davcna_st ? parseInt(novaStrankaData.davcna_st) : undefined,
-      });
-      setStrankeList((prev) => [...prev, res.data].sort((a, b) => a.naziv.localeCompare(b.naziv)));
-      setSelectedStranka(String(res.data.id_stranka));
+      const novaStranka = await saveStranka(novaStrankaData);
+      addStranka(novaStranka);
+      setSelectedStranka(String(novaStranka.id_stranka));
       setNovaStrankaOpen(false);
       setNovaStrankaData({ naziv: '', email: '', telefonska: '', davcna_st: '' });
     } catch {
@@ -133,31 +318,12 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
 
   const handleSubmit = async () => {
     setError(null);
-    if (!datum)           return setError('Datum je obvezen.');
-    if (!selectedVoznik)  return setError('Izberite voznika.');
-
-    const { zacetek, konc } = buildTimestamps(datum, uraZacetek, uraKonec);
-
+    const validationError = validatePrevoz(datum, selectedVoznik);
+    if (validationError) { setError(validationError); return; }
     try {
       setSaving(true);
-      const body = {
-        datum,
-        zacetek,
-        konc,
-        relacija:    relacija   || undefined,
-        opis:        opis       || undefined,
-        cena:        cena !== '' ? parseFloat(cena) : undefined,
-        placano,
-        fk_vozilo:   selectedVozilo  ? parseInt(selectedVozilo)  : undefined,
-        fk_stranka:  selectedStranka ? parseInt(selectedStranka) : undefined,
-        fk_uporabnik: parseInt(selectedVoznik),
-      };
-
-      if (isEdit) {
-        await api.put(`/admin/voznje/${prevoz.id_voznja}`, body);
-      } else {
-        await api.post('/admin/voznje/nova', body);
-      }
+      const body = buildPrevozPayload({ datum, uraZacetek, uraKonec, relacija, opis, cena, placano, selectedVozilo, selectedStranka, selectedVoznik });
+      await savePrevoz(isEdit, prevoz?.id_voznja, body);
       onSaved();
     } catch (e) {
       setError(e.response?.data?.error || 'Napaka pri shranjevanju.');
@@ -166,19 +332,35 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
     }
   };
 
-  const submitLabel = isEdit ? 'Shrani spremembe' : 'Dodaj prevoz';
+  const voznikiItems = voznikiList.map((v) => ({ id: v.id_uporabnik, rawId: v.id_uporabnik, ime: v.ime, priimek: v.priimek }));
+  const vozilaItems  = vozilaList.map((v) => ({ id: v.id_vozilo, rawId: v.id_vozilo, registerska: v.registerska, tip: v.tip_vozila?.naziv }));
+
+  return {
+    isEdit, datum, setDatum, uraZacetek, setUraZacetek, uraKonec, setUraKonec,
+    relacija, setRelacija, opis, setOpis, cena, setCena, placano, setPlacano,
+    selectedStranka, setSelectedStranka, selectedVozilo, setSelectedVozilo,
+    selectedVoznik, setSelectedVoznik, novaStrankaOpen, setNovaStrankaOpen,
+    novaStrankaData, setNovaStrankaData, novaStrankaSaving,
+    strankeList, voznikiItems, vozilaItems,
+    zasedeniVozniki, zasedeniVozila,
+    saving, error, handleSaveNovaStranka, handleSubmit,
+  };
+}
+
+function PrevozModal({ mode, prevoz, onClose, onSaved }) {
+  const m = usePrevozModal(mode, prevoz, onSaved);
+
+  const modalIcon  = m.isEdit ? 'edit_calendar' : 'add_road';
+  const modalTitle = m.isEdit ? 'Uredi prevoz'  : 'Nov prevoz';
+  const submitLabel = m.isEdit ? 'Shrani spremembe' : 'Dodaj prevoz';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 sticky top-0 bg-white rounded-t-2xl z-10">
           <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined rounded-lg bg-blue-50 p-2 text-blue-600">
-              {isEdit ? 'edit_calendar' : 'add_road'}
-            </span>
-            <h2 className="text-base font-semibold text-slate-900">
-              {isEdit ? 'Uredi prevoz' : 'Nov prevoz'}
-            </h2>
+            <span className="material-symbols-outlined rounded-lg bg-blue-50 p-2 text-blue-600">{modalIcon}</span>
+            <h2 className="text-base font-semibold text-slate-900">{modalTitle}</h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
             <span className="material-symbols-outlined text-[20px]">close</span>
@@ -186,145 +368,88 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
         </div>
 
         <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
-          {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
+          {m.error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{m.error}</div>}
 
           <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Datum *</label>
-              <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)}
+              <input type="date" value={m.datum} onChange={(e) => m.setDatum(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Začetek</label>
-              <input type="time" value={uraZacetek} onChange={(e) => setUraZacetek(e.target.value)}
+              <input type="time" value={m.uraZacetek} onChange={(e) => m.setUraZacetek(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Konec</label>
-              <input type="time" value={uraKonec} onChange={(e) => setUraKonec(e.target.value)}
+              <input type="time" value={m.uraKonec} onChange={(e) => m.setUraKonec(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Voznik *</label>
-            <div className="grid grid-cols-2 gap-1.5 max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2">
-              {voznikiList.map((v) => {
-                const id = String(v.id_uporabnik);
-                const zaseden = zasedeniVozniki.includes(v.id_uporabnik);
-                const selected = selectedVoznik === id;
-                return (
-                  <button key={id} type="button" onClick={() => setSelectedVoznik(id)}
-                    className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                      selected && zaseden ? 'border-orange-400 bg-orange-50 text-orange-900'
-                      : selected          ? 'border-blue-500 bg-blue-50 text-blue-800'
-                      : zaseden           ? 'border-yellow-300 bg-yellow-50 hover:border-yellow-400'
-                                          : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40'
-                    }`}>
-                    <span className="font-medium">{v.ime} {v.priimek}</span>
-                    {zaseden && (
-                      <span className={`ml-2 inline-flex items-center gap-0.5 text-[10px] font-bold ${selected ? 'text-orange-500' : 'text-yellow-600'}`}>
-                        <span className="material-symbols-outlined text-[12px]">warning</span>
-                        ZASEDEN
-                      </span>
-                    )}
-                    {!zaseden && selected && <span className="material-symbols-outlined text-[16px] text-blue-600">check_circle</span>}
-                  </button>
-                );
-              })}
-            </div>
+            <SelectionGrid
+              items={m.voznikiItems}
+              selectedId={m.selectedVoznik}
+              zasedeni={m.zasedeniVozniki}
+              onSelect={m.setSelectedVoznik}
+              deselectable={false}
+              renderItem={(item, selected, zaseden) => <VoznikItem item={item} selected={selected} zaseden={zaseden} />}
+            />
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Vozilo</label>
-            <div className="grid grid-cols-2 gap-1.5 max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2">
-              {vozilaList.map((v) => {
-                const id = String(v.id_vozilo);
-                const zaseden = zasedeniVozila.includes(v.id_vozilo);
-                const selected = selectedVozilo === id;
-                return (
-                  <button key={id} type="button" onClick={() => setSelectedVozilo(selected ? '' : id)}
-                    className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
-                      selected && zaseden ? 'border-orange-400 bg-orange-50 text-orange-900'
-                      : selected          ? 'border-blue-500 bg-blue-50 text-blue-800'
-                      : zaseden           ? 'border-yellow-300 bg-yellow-50 hover:border-yellow-400'
-                                          : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40'
-                    }`}>
-                    <div>
-                      <p className="font-medium">{v.registerska}</p>
-                      {v.tip_vozila?.naziv && <p className="text-[11px] text-slate-500">{v.tip_vozila.naziv}</p>}
-                    </div>
-                    {zaseden && (
-                      <span className={`ml-2 inline-flex items-center gap-0.5 text-[10px] font-bold ${selected ? 'text-orange-500' : 'text-yellow-600'}`}>
-                        <span className="material-symbols-outlined text-[12px]">warning</span>
-                        ZASEDEN
-                      </span>
-                    )}
-                    {!zaseden && selected && <span className="material-symbols-outlined text-[16px] text-blue-600">check_circle</span>}
-                  </button>
-                );
-              })}
-            </div>
+            <SelectionGrid
+              items={m.vozilaItems}
+              selectedId={m.selectedVozilo}
+              zasedeni={m.zasedeniVozila}
+              onSelect={m.setSelectedVozilo}
+              deselectable={true}
+              renderItem={(item, selected, zaseden) => <VoziloItem item={item} selected={selected} zaseden={zaseden} />}
+            />
           </div>
 
           <div>
             <div className="mb-1 flex items-center justify-between">
               <label className="text-xs font-medium text-slate-600">Stranka</label>
-              <button type="button" onClick={() => setNovaStrankaOpen((o) => !o)}
+              <button type="button" onClick={() => m.setNovaStrankaOpen((o) => !o)}
                 className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-50">
-                <span className="material-symbols-outlined text-[14px]">{novaStrankaOpen ? 'close' : 'add'}</span>
-                {novaStrankaOpen ? 'Prekliči' : 'Nova stranka'}
+                <span className="material-symbols-outlined text-[14px]">{m.novaStrankaOpen ? 'close' : 'add'}</span>
+                {m.novaStrankaOpen ? 'Prekliči' : 'Nova stranka'}
               </button>
             </div>
-            <select value={selectedStranka} onChange={(e) => setSelectedStranka(e.target.value)}
+            <select value={m.selectedStranka} onChange={(e) => m.setSelectedStranka(e.target.value)}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">— Izberite stranko —</option>
-              {strankeList.map((s) => (
-                <option key={s.id_stranka} value={String(s.id_stranka)}>{s.naziv}{s.telefonska ? ` · ${s.telefonska}` : ''}</option>
+              {m.strankeList.map((s) => (
+                <option key={s.id_stranka} value={String(s.id_stranka)}>
+                  {s.naziv}{s.telefonska ? ` · ${s.telefonska}` : ''}
+                </option>
               ))}
             </select>
-
-            {novaStrankaOpen && (
-              <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-2">
-                <p className="text-xs font-semibold text-blue-700">Nova stranka</p>
-                <input value={novaStrankaData.naziv}
-                  onChange={(e) => setNovaStrankaData((d) => ({ ...d, naziv: e.target.value }))}
-                  placeholder="Naziv *"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                <div className="grid grid-cols-2 gap-2">
-                  <input value={novaStrankaData.telefonska}
-                    onChange={(e) => setNovaStrankaData((d) => ({ ...d, telefonska: e.target.value }))}
-                    placeholder="Telefonska"
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                  <input value={novaStrankaData.email}
-                    onChange={(e) => setNovaStrankaData((d) => ({ ...d, email: e.target.value }))}
-                    placeholder="E-pošta"
-                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                </div>
-                <input value={novaStrankaData.davcna_st}
-                  onChange={(e) => setNovaStrankaData((d) => ({ ...d, davcna_st: e.target.value }))}
-                  placeholder="Davčna številka"
-                  type="number"
-                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
-                <button type="button" disabled={novaStrankaSaving || !novaStrankaData.naziv.trim()}
-                  onClick={handleSaveNovaStranka}
-                  className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
-                  {novaStrankaSaving ? 'Shranjujem...' : 'Ustvari stranko'}
-                </button>
-              </div>
+            {m.novaStrankaOpen && (
+              <NovaStrankaForm
+                data={m.novaStrankaData}
+                onChange={m.setNovaStrankaData}
+                onSave={m.handleSaveNovaStranka}
+                saving={m.novaStrankaSaving}
+              />
             )}
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Relacija</label>
-            <input value={relacija} onChange={(e) => setRelacija(e.target.value)}
+            <input value={m.relacija} onChange={(e) => m.setRelacija(e.target.value)}
               placeholder="npr. Ljubljana → Maribor"
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Opis</label>
-            <textarea value={opis} onChange={(e) => setOpis(e.target.value)}
+            <textarea value={m.opis} onChange={(e) => m.setOpis(e.target.value)}
               placeholder="Dodatne opombe..."
               rows={3}
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
@@ -333,13 +458,13 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
           <div className="grid grid-cols-2 gap-3 items-end">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Cena (€)</label>
-              <input type="number" min="0" step="0.01" value={cena} onChange={(e) => setCena(e.target.value)}
+              <input type="number" min="0" step="0.01" value={m.cena} onChange={(e) => m.setCena(e.target.value)}
                 placeholder="0.00"
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div className="pb-2">
               <label className="flex cursor-pointer items-center gap-2 text-sm text-slate-700">
-                <input type="checkbox" checked={placano} onChange={(e) => setPlacano(e.target.checked)}
+                <input type="checkbox" checked={m.placano} onChange={(e) => m.setPlacano(e.target.checked)}
                   className="h-4 w-4 rounded border-slate-300 accent-blue-600" />
                 <span className="font-medium">Plačano</span>
               </label>
@@ -352,10 +477,10 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
             className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
             Prekliči
           </button>
-          <button type="button" onClick={handleSubmit} disabled={saving}
+          <button type="button" onClick={m.handleSubmit} disabled={m.saving}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-60">
             <span className="material-symbols-outlined text-[16px]">save</span>
-            {saving ? 'Shranjujem...' : submitLabel}
+            {m.saving ? 'Shranjujem...' : submitLabel}
           </button>
         </div>
       </div>
@@ -409,22 +534,21 @@ function DeleteModal({ prevoz, onClose, onDeleted }) {
 }
 
 export default function Prevozi() {
-  const [voznje, setVoznje]           = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [error, setError]             = useState(null);
-  const [currentPage, setCurrentPage] = useState(1);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [voznje, setVoznje]               = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [error, setError]                 = useState(null);
+  const [currentPage, setCurrentPage]     = useState(1);
+  const [searchQuery, setSearchQuery]     = useState('');
   const [filterPlacano, setFilterPlacano] = useState('vse');
-  const [modal, setModal]             = useState(null);
-  const [togglingId, setTogglingId]   = useState(null);
-  const [confirmItem, setConfirmItem] = useState(null);
+  const [modal, setModal]                 = useState(null);
+  const [togglingId, setTogglingId]       = useState(null);
+  const [confirmItem, setConfirmItem]     = useState(null);
 
   const fetchVoznje = async () => {
     try {
       setLoading(true);
       setError(null);
-      const danes = new Date().toISOString().split('T')[0];
-      const res = await api.get(`/admin/voznje?prihodnje=true`);
+      const res = await api.get('/admin/voznje?prihodnje=true');
       setVoznje(res.data || []);
     } catch (e) {
       setError(e.response?.data?.error || 'Napaka pri nalaganju prevozov');
@@ -440,7 +564,9 @@ export default function Prevozi() {
     try {
       setTogglingId(prevoz.id_voznja);
       await api.put(`/admin/voznje/${prevoz.id_voznja}`, { placano: !prevoz.placano });
-      setVoznje((prev) => prev.map((v) => v.id_voznja === prevoz.id_voznja ? { ...v, placano: !v.placano } : v));
+      setVoznje((prev) => prev.map((v) =>
+        v.id_voznja === prevoz.id_voznja ? { ...v, placano: !v.placano } : v
+      ));
     } catch {
       setError('Napaka pri posodabljanju statusa plačila');
     } finally {
@@ -466,7 +592,10 @@ export default function Prevozi() {
   }, [voznje, searchQuery, filterPlacano]);
 
   const totalPages   = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
-  const paginated    = useMemo(() => { const s = (currentPage - 1) * ITEMS_PER_PAGE; return filtered.slice(s, s + ITEMS_PER_PAGE); }, [filtered, currentPage]);
+  const paginated    = useMemo(() => {
+    const s = (currentPage - 1) * ITEMS_PER_PAGE;
+    return filtered.slice(s, s + ITEMS_PER_PAGE);
+  }, [filtered, currentPage]);
   const startRow     = filtered.length === 0 ? 0 : (currentPage - 1) * ITEMS_PER_PAGE + 1;
   const endRow       = Math.min(currentPage * ITEMS_PER_PAGE, filtered.length);
   const skupajCena   = useMemo(() => voznje.reduce((s, v) => s + (v.cena ?? 0), 0), [voznje]);
