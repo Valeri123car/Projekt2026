@@ -6,8 +6,8 @@ import useAuthStore from "../store/authStore";
 
 const ITEMS_PER_PAGE = 20;
 
-const HEADERS_VOZNIK = ["Začetek", "Konec", "Trajanje", "Relacija", "Stranka", "Opis", "Plačano", "Prevoz"];
-const HEADERS_ADMIN  = ["Voznik", "Začetek", "Konec", "Trajanje", "Relacija", "Stranka", "Opis", "Plačano", "Prevoz", ""];
+const HEADERS_VOZNIK = ["Začetek", "Konec", "Trajanje", "Relacija", "Stranka", "Opis", "Plačano"];
+const HEADERS_ADMIN  = ["Voznik", "Začetek", "Konec", "Trajanje", "Relacija", "Stranka", "Opis", "Plačano", "Prevoz"];
 
 function formatDateTime(dateString) {
   const date = new Date(dateString);
@@ -157,7 +157,6 @@ function KonvertirajVPrevozModal({ voznja, onClose, onSaved }) {
           {error && (
             <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
           )}
-
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Stranka *</label>
             <select value={selectedStranka} onChange={(e) => setSelectedStranka(e.target.value)}
@@ -168,7 +167,6 @@ function KonvertirajVPrevozModal({ voznja, onClose, onSaved }) {
               ))}
             </select>
           </div>
-
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Vozilo *</label>
             <select value={selectedVozilo} onChange={(e) => setSelectedVozilo(e.target.value)}
@@ -179,14 +177,12 @@ function KonvertirajVPrevozModal({ voznja, onClose, onSaved }) {
               ))}
             </select>
           </div>
-
           <div>
             <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Cena (€)</label>
             <input type="number" min="0" step="0.01" value={cena} onChange={(e) => setCena(e.target.value)}
               placeholder="0.00"
               className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
           </div>
-
           <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 space-y-1">
             <p>Datum: <span className="font-medium text-slate-700">{new Date(voznja.datum || voznja.zacetek).toLocaleDateString("sl-SI")}</span></p>
             <p>Voznik: <span className="font-medium text-slate-700">{voznja.uporabnik ? `${voznja.uporabnik.ime} ${voznja.uporabnik.priimek}` : `#${voznja.fk_uporabnik}`}</span></p>
@@ -528,19 +524,14 @@ export default function Voznje() {
                             {v.placano ? "Plačano" : "Neplačano"}
                           </button>
                         </td>
-                        <td className="px-6 py-4">
-                          {v.urnik ? (
-                            <span className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
-                              <span className="material-symbols-outlined text-[14px]">link</span>
-                              {v.urnik.naziv || new Date(v.urnik.datum).toLocaleDateString("sl-SI")}
-                            </span>
-                          ) : (
-                            <span className="text-xs text-gray-400">—</span>
-                          )}
-                        </td>
                         {!isVoznik && (
-                          <td className="px-4 py-4">
-                            {konvertiraneIds.has(v.id_voznja) ? (
+                          <td className="px-6 py-4">
+                            {v.urnik ? (
+                              <span className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                                <span className="material-symbols-outlined text-[14px]">link</span>
+                                {v.urnik.naziv || new Date(v.urnik.datum).toLocaleDateString("sl-SI")}
+                              </span>
+                            ) : konvertiraneIds.has(v.id_voznja) ? (
                               <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-400">
                                 <span className="material-symbols-outlined text-[14px]">check_circle</span>
                                 V prevozih
