@@ -28,18 +28,18 @@ model Voznja {
   datum           DateTime  @db.Date
   zacetek         DateTime
   konc            DateTime
-  trajanje        String?
-  aktivnost       String?
-  registerska     String?
-  posadka         String?
   fk_uporabnik    Int
+  fk_urnik        Int?
   timestamp_zapis DateTime?
   stranka         String?   @db.VarChar(100)
   relacija        String?   @db.VarChar(255)
   opis            String?   @db.VarChar(500)
+  placano         Boolean   @default(false)
   uporabnik       Uporabnik @relation(fields: [fk_uporabnik], references: [id_uporabnik])
+  urnik           Urnik?    @relation(fields: [fk_urnik], references: [id_urnik])
 
   @@index([fk_uporabnik])
+  @@index([fk_urnik])
 }
 
 model TipVozila {
@@ -83,6 +83,7 @@ model Urnik {
   vozilo       Vozilo    @relation(fields: [fk_vozilo], references: [id_vozilo])
   uporabnik    Uporabnik @relation(fields: [fk_uporabnik], references: [id_uporabnik])
   stranka      Stranka   @relation(fields: [fk_stranka], references: [id_stranka])
+  voznje       Voznja[]
 
   @@index([fk_vozilo])
   @@index([fk_uporabnik])
@@ -102,7 +103,6 @@ model LOG_voznja {
   @@index([voznja_fk_uporabnik])
   @@index([timestamp])
 }
-
 
 model TahografZapis {
   id_zapis        Int       @id @default(autoincrement())

@@ -21,6 +21,7 @@ export default function NovaVoznjaScreen({ navigation }) {
   const [stranka, setStranka] = useState("");
   const [postaje, setPostaje] = useState(["", ""]);
   const [opis, setOpis] = useState("");
+  const [placano, setPlacano] = useState(false);
   const [loading, setLoading] = useState(false);
   const [aktivniPicker, setAktivniPicker] = useState(null);
 
@@ -69,6 +70,7 @@ export default function NovaVoznjaScreen({ navigation }) {
         stranka: stranka || null,
         relacija: relacija || null,
         opis: opis || null,
+        placano,
       });
 
       if (jePovedzan) {
@@ -91,6 +93,7 @@ export default function NovaVoznjaScreen({ navigation }) {
       month: "2-digit",
       year: "numeric",
     });
+
   const formatCas = (d) =>
     d.toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" });
 
@@ -370,6 +373,30 @@ export default function NovaVoznjaScreen({ navigation }) {
         </View>
       </View>
 
+      <View style={s.sekcija}>
+        <Text style={s.sekcijaNaslov}>PLAČILO</Text>
+        <TouchableOpacity
+          style={s.placanoVrstica}
+          onPress={() => setPlacano((p) => !p)}
+        >
+          <View style={[s.placanoIkona, placano && s.placanoIkonaAktivna]}>
+            <MaterialCommunityIcons
+              name={placano ? "check-circle" : "circle-outline"}
+              size={22}
+              color={placano ? "#2e7d32" : "#727785"}
+            />
+          </View>
+          <View style={s.placanoTekst}>
+            <Text style={s.placanoNaslov}>
+              {placano ? "Plačano" : "Neplačano"}
+            </Text>
+            <Text style={s.placanoOpis}>
+              Označi ali je bila vožnja že plačana
+            </Text>
+          </View>
+        </TouchableOpacity>
+      </View>
+
       {jePovedzan && (
         <View style={s.googleInfo}>
           <MaterialCommunityIcons name="google" size={14} color="#2e7d32" />
@@ -534,6 +561,26 @@ const s = StyleSheet.create({
     fontWeight: "600",
     flex: 1,
   },
+  placanoVrstica: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 4,
+  },
+  placanoIkona: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#f9f9ff",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#e1e2ec",
+  },
+  placanoIkonaAktivna: { backgroundColor: "#f1f8f1", borderColor: "#2e7d32" },
+  placanoTekst: { flex: 1 },
+  placanoNaslov: { fontSize: 14, fontWeight: "600", color: "#191b23" },
+  placanoOpis: { fontSize: 11, color: "#727785", marginTop: 2 },
   googleInfo: {
     flexDirection: "row",
     alignItems: "center",
