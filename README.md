@@ -14,19 +14,22 @@
 ## Kazalo vsebine
 
 1. [Pregled sistema](#1-pregled-sistema)
-2. [Arhitektura](#2-arhitektura)
-3. [Tok podatkov](#3-tok-podatkov)
-4. [Use Case diagram](#4-use-case-diagram)
-5. [Sequence diagrami](#5-sequence-diagrami)
-6. [Varnost](#6-varnost)
-7. [API referenca](#7-api-referenca)
-8. [Baza podatkov](#8-baza-podatkov)
-9. [Razvoj in lokalna namestitev](#9-razvoj-in-lokalna-namestitev)
-10. [Deployment](#10-deployment)
-11. [Zagotavljanje kakovosti](#11-zagotavljanje-kakovosti)
-12. [Znane omejitve](#12-znane-omejitve)
-13. [Diagrami aktivnosti](#13-diagrami-aktivnosti)
-14. [Testiranje uporabniške izkušnje (SUS)](#14-testiranje-uporabniške-izkušnje-sus)
+2. [Ekipa](#2-ekipa)
+3. [Arhitektura](#3-arhitektura)
+4. [Tok podatkov](#4-tok-podatkov)
+5. [Use Case diagram](#5-use-case-diagram)
+6. [Sequence diagrami](#6-sequence-diagrami)
+7. [Diagrami aktivnosti](#7-diagrami-aktivnosti)
+8. [Varnost](#8-varnost)
+9. [API referenca](#9-api-referenca)
+10. [Baza podatkov](#10-baza-podatkov)
+11. [Arhitekturne odločitve](#11-arhitekturne-odlo%C4%8Ditve)
+12. [Vodenje projekta](#12-vodenje-projekta)
+13. [Razvoj in lokalna namestitev](#13-razvoj-in-lokalna-namestitev)
+14. [Deployment](#14-deployment)
+15. [Zagotavljanje kakovosti](#15-zagotavljanje-kakovosti)
+16. [Znane omejitve](#16-znane-omejitve)
+17. [Testiranje uporabniške izkušnje (SUS)](#17-testiranje-uporabni%C5%A1ke-izku%C5%A1nje-sus)
 
 ---
 
@@ -39,6 +42,7 @@ Logistična podjetja, ki upravljajo vozne parke in zaposlujejo voznike, se sooč
 ### Ključne funkcionalnosti
 
 - Sledenje tahografskim stanjem v realnem času prek mobilne aplikacije (VOZNJA, ODMOR, POCITEK, DELO, RAZPOLOZLJIVOST, DRUGO)
+- **Offline delovanje mobilne aplikacije** — tahografska stanja se shranjujejo lokalno ob izpadu povezave in se avtomatsko sinhronizirajo ob ponovni vzpostavitvi
 - Uvoz binarnih EU Digital Tachograph datotek (DDD format) in Excel datotek prek spletnega vmesnika
 - Upravljanje vožnje: beleženje, pregledovanje in brisanje posameznih voženj
 - Razpored voznikov: urniki, dodeljevanje vozil in strank
@@ -60,7 +64,19 @@ Logistična podjetja, ki upravljajo vozne parke in zaposlujejo voznike, se sooč
 
 ---
 
-## 2. Arhitektura
+## 2. Ekipa
+
+| Član            | GitHub                                           | Vloga                                                |
+| --------------- | ------------------------------------------------ | ---------------------------------------------------- |
+| Valeri Kamburov | [@Valeri123car](https://github.com/Valeri123car) | Vodja projekta, full-stack razvoj (API, Web, Mobile) |
+| Luka Crešnar    | [@LukaCresnar](https://github.com/LukaCresnar)   | Web razvoj, baza podatkov, testiranje                |
+| Rok Krajnc      | [@kranjo4](https://github.com/kranjo4)           | Web razvoj, baza podatkov, testiranje                |
+
+**Skrbnik projekta:** Sirena d.o.o.
+
+---
+
+## 3. Arhitektura
 
 Sistem sledi klasični **3-tier arhitekturi**: mobilni in spletni odjemalec komunicirata z Fastify REST API-jem, ki upravlja bazo podatkov PostgreSQL prek Prisma ORM-a. Python skripte se izvajajo kot subprocesi za obdelavo binarnih tahografskih datotek.
 
@@ -100,41 +116,40 @@ graph TB
 
 ### ER diagram
 
-Spodnji diagram prikazuje vseh 10 entitet v bazi podatkov skupaj z vsemi relacijami in kardinalnostmi. Centralna entiteta je `Uporabnik`, ki je povezana z večino ostalih tabel. `TahografZapis` ima poseben atribut `vir`, ki razlikuje med ročno snemanjem prek mobilne aplikacije in uvozom DDD/Excel datotek.
+Diagram prikazuje 7 entitet v bazi podatkov skupaj z vsemi relacijami in kardinalnostmi. Centralna entiteta je `Uporabnik`, ki je povezana z večino ostalih tabel. `TahografZapis` ima poseben atribut `vir` (`POSNETO` ali `UVOZ`), ki razlikuje med ročno snemanjem prek mobilne aplikacije in uvozom DDD/Excel datotek. `Voznja` vsebuje poslovne podatke (cena, stranka, relacija) in je neodvisna od tahografskih tehničnih zapisov.
 
 ```mermaid
 erDiagram
     Uporabnik {
-        int id PK
+        int id_uporabnik PK
         string ime
         string priimek
         string email
         string geslo
         int dostop
         string emso_crypted
-        int fk_postavka FK
         bool gdpr_soglasje
         datetime gdpr_datum
     }
 
     Voznja {
-        int id PK
+        int id_voznja PK
         date datum
-        time zacetek
-        time konc
-        int trajanje
-        string aktivnost
-        string registerska
-        bool posadka
-        string stranka
+        datetime zacetek
+        datetime konc
+        int fk_uporabnik FK
+        int fk_vozilo FK
+        int fk_stranka FK
+        string stranka_ime
         string relacija
         string opis
-        int fk_uporabnik FK
+        float cena
+        bool placano
         datetime timestamp_zapis
     }
 
     TahografZapis {
-        int id PK
+        int id_zapis PK
         int fk_uporabnik FK
         string stanje
         datetime zacetek
@@ -145,72 +160,46 @@ erDiagram
         string registrska
         bool posadka
         string vir
-    }
-
-    Urnik {
-        int id PK
-        date datum
-        decimal cena
-        string naziv
-        bool placano
-        int fk_vozilo FK
-        int fk_uporabnik FK
-        int fk_stranka FK
+        datetime timestamp_zapis
     }
 
     Vozilo {
-        int id PK
+        int id_vozilo PK
         string registerska
         int st_sedezev
-        decimal dolzina
+        int dolzina
         int fk_tip_vozila FK
     }
 
     TipVozila {
-        int id PK
+        int id_tip_vozila PK
         string naziv
     }
 
     Stranka {
-        int id PK
+        int id_stranka PK
         string naziv
         string email
         string telefonska
-        string davcna_st
-    }
-
-    Racun {
-        int id PK
-        date datum_izdaje
-        int st_ur
-        decimal placa
-        int fk_uporabnik FK
-    }
-
-    UrnaPostavka {
-        int id PK
-        decimal postavka
+        int davcna_st
     }
 
     LOG_voznja {
-        int id PK
+        int idLOG PK
         datetime timestamp
         string TYPE
         string metoda
         string url
         int voznja_id_voznja
-        int voznja_fk_uporabnik
+        int voznja_fk_uporabnik FK
     }
 
     Uporabnik ||--o{ Voznja : "ima"
     Uporabnik ||--o{ TahografZapis : "ima"
-    Uporabnik ||--o{ Urnik : "ima"
-    Uporabnik ||--o{ Racun : "ima"
-    Uporabnik }o--|| UrnaPostavka : "uporablja"
-    Urnik }o--|| Vozilo : "uporablja"
-    Urnik }o--|| Stranka : "za"
+    Uporabnik ||--o{ LOG_voznja : "beleži"
+    Voznja }o--o| Vozilo : "uporablja"
+    Voznja }o--o| Stranka : "za stranko"
     Vozilo }o--|| TipVozila : "je tipa"
-    Voznja ||--o{ LOG_voznja : "beleži"
 ```
 
 ### Razredni diagram
@@ -300,7 +289,7 @@ classDiagram
 
 ---
 
-## 3. Tok podatkov
+## 4. Tok podatkov
 
 ### a) Login flow
 
@@ -323,25 +312,32 @@ flowchart TD
     L --> M[Odjemalec shrani token\nExpo: expo-secure-store\nWeb: Zustand store]
 ```
 
-### b) Tahograf recording flow (mobilna aplikacija)
+### b) Tahograf recording flow z offline podporo (mobilna aplikacija)
 
-Voznik na mobilni aplikaciji ročno beleži tahografska stanja. Ko začne stanje, API preveri, ali ni že kakšno stanje aktivno, ter ustvari nov zapis. Ob zaključku izračuna trajanje in posodobi zapis.
+Voznik na mobilni aplikaciji ročno beleži tahografska stanja. Sistem podpira offline delovanje — ob izpadu povezave se stanje shrani lokalno v `AsyncStorage` prek `tahografCache.js`. Ob ponovni vzpostavitvi povezave `useSinhronizacija.js` hook avtomatsko posreduje čakajoče zahtevke na API.
 
 ```mermaid
 flowchart TD
-    A[Voznik izbere stanje\npr. VOZNJA] --> B[POST /api/v1/tahograf/zacni]
-    B --> C[JWT verifikacija]
-    C --> D{Obstaja aktivno\nstanje?}
-    D -->|Da| E[HTTP 409 Conflict\nZapri prejšnje stanje]
-    D -->|Ne| F[Ustvari TahografZapis\nvir = POSNETO\nzacetek = NOW]
-    F --> G[HTTP 201: Created zapis]
-    G --> H[Mobilna app prikaže\naktivno stanje + timer]
-    H --> I[Voznik zaključi stanje]
-    I --> J[POST /api/v1/tahograf/zakljuci]
-    J --> K[Poišči aktivni zapis\nfk_uporabnik = JWT user]
-    K --> L[Izračunaj trajanje_min\nkonec - zacetek]
-    L --> M[Posodobi TahografZapis\nkonec + trajanje_min]
-    M --> N[HTTP 200: posodobljen zapis]
+    A[Voznik izbere stanje\npr. VOZNJA] --> B{Internetna\npovezava?}
+    B -->|Da| C[POST /api/v1/tahograf/zacni]
+    B -->|Ne| D[Shrani lokalno\ntahografCache.js\nAsyncStorage]
+    D --> E[Prikaži timer\niz lokalnega stanja]
+    C --> F[JWT verifikacija]
+    F --> G{Obstaja aktivno\nstanje?}
+    G -->|Da| H[HTTP 409 Conflict]
+    G -->|Ne| I[Ustvari TahografZapis\nvir = POSNETO\nzacetek = NOW]
+    I --> J[HTTP 201: Created zapis]
+    J --> K[Shrani lokalno\nshraniAktivnoLokalno]
+    K --> E
+    E --> L[Voznik zaključi stanje]
+    L --> M{Internetna\npovezava?}
+    M -->|Da| N[POST /api/v1/tahograf/zakljuci]
+    M -->|Ne| O[Shrani zakljuci\nv čakajočo vrsto\ndodajCakajoci]
+    O --> P[useSinhronizacija hook\nzazna vzpostavitev povezave]
+    P --> Q[Posreduj vse čakajoče\nzahtevke po vrsti]
+    Q --> R[Osveži podatke\nnaloziPodatke]
+    N --> S[Posodobi TahografZapis\nkonec + trajanje_min]
+    S --> R
 ```
 
 ### c) DDD datoteka import flow
@@ -391,7 +387,7 @@ flowchart TD
 
 ---
 
-## 4. Use Case diagram
+## 5. Use Case diagram
 
 Use case diagram prikazuje vse akterje sistema (Voznik, Admin, Računovodja, Sistem) in vse akcije, ki jih posamezni akter lahko izvede. Sistem nastopa kot avtonomen akter pri avtomatskih procesih (audit log, JWT refresh, rate limiting).
 
@@ -423,6 +419,8 @@ graph LR
         UC12[Ogled zgodovine stanj]
         UC13[Ogled dnevnega povzetka]
         UC14[Uvoz DDD/Excel datoteke]
+        UC31[Offline beleženje stanj]
+        UC32[Avtomatska sinhronizacija]
     end
 
     subgraph Urnik
@@ -466,6 +464,8 @@ graph LR
     VOZNIK --> UC15
     VOZNIK --> UC17
     VOZNIK --> UC25
+    VOZNIK --> UC31
+    VOZNIK --> UC32
 
     ADMIN --> UC1
     ADMIN --> UC2
@@ -493,7 +493,7 @@ graph LR
 
 ---
 
-## 5. Sequence diagrami
+## 6. Sequence diagrami
 
 ### a) Login s refresh token mehanizmom
 
@@ -532,39 +532,48 @@ sequenceDiagram
     end
 ```
 
-### b) Zapis tahografskega stanja (mobile → API → DB)
+### b) Zapis tahografskega stanja z offline podporo (mobile → cache → API → DB)
 
-Voznik prek mobilne aplikacije začne in zaključi tahografsko stanje. Sequence diagram prikazuje, kako API preveri morebitno aktivno stanje, ustvari nov zapis in ga ob zaključku posodobi z izračunanim trajanjem.
+Voznik prek mobilne aplikacije začne in zaključi tahografsko stanje. Sistem podpira offline delovanje prek lokalnega `AsyncStorage` casha. Ko je voznik brez povezave, se stanje shrani lokalno; `useSinhronizacija` hook zazna vzpostavitev povezave in posreduje čakajoče zahtevke.
 
 ```mermaid
 sequenceDiagram
     participant MOB as Mobilna aplikacija
+    participant CACHE as tahografCache\n(AsyncStorage)
     participant API as Fastify API
     participant DB as PostgreSQL
 
-    MOB->>API: POST /api/v1/tahograf/zacni\nAuthorization: Bearer <JWT>\n{stanje: "VOZNJA", registrska, lokacija_zac}
-    API->>API: JWT verifikacija + RBAC
-    API->>DB: SELECT * FROM TahografZapis\nWHERE fk_uporabnik = ? AND konec IS NULL
-    DB-->>API: Aktivni zapis (ali null)
-    alt Aktivno stanje obstaja
-        API-->>MOB: HTTP 409 Conflict
-    else Ni aktivnega stanja
-        API->>DB: INSERT INTO TahografZapis\n{fk_uporabnik, stanje, zacetek: NOW(), vir: "POSNETO"}
-        DB-->>API: Ustvarjeni zapis z id
+    MOB->>MOB: Voznik pritisne VOZNJA
+    MOB->>CACHE: shraniAktivnoLokalno(noviZapis)
+    MOB->>MOB: Prikaži timer (lokalno)
+
+    alt Online
+        MOB->>API: POST /api/v1/tahograf/zacni\n{stanje, registrska}
+        API->>DB: INSERT TahografZapis\nvir=POSNETO, zacetek=NOW()
+        DB-->>API: Ustvarjeni zapis
         API-->>MOB: HTTP 201 {id, stanje, zacetek}
-        MOB->>MOB: Prikaži timer aktivnega stanja
+        MOB->>CACHE: shraniAktivnoLokalno(serverZapis)
+    else Offline
+        MOB->>CACHE: dodajCakajoci({tip: "zacni", stanje, cas})
+        MOB->>MOB: Alert "Shranjeno lokalno"
     end
 
-    Note over MOB,API: Voznik zaključi stanje
+    Note over MOB,CACHE: Voznik menja stanja med offline
 
-    MOB->>API: POST /api/v1/tahograf/zakljuci\nAuthorization: Bearer <JWT>\n{lokacija_kon}
-    API->>DB: SELECT * FROM TahografZapis\nWHERE fk_uporabnik = ? AND konec IS NULL
-    DB-->>API: Aktivni zapis
-    API->>API: Izračunaj trajanje_min = NOW() - zacetek
-    API->>DB: UPDATE TahografZapis\nSET konec = NOW(), trajanje_min = ?
-    DB-->>API: Posodobljeni zapis
-    API-->>MOB: HTTP 200 {id, stanje, zacetek, konec, trajanje_min}
-    MOB->>MOB: Skrij timer, prikaži zaključeno stanje
+    MOB->>CACHE: preberiCakajoche()
+    CACHE-->>MOB: Seznam čakajočih zahtevkov
+
+    Note over MOB,API: Vzpostavitev internetne povezave
+
+    MOB->>API: useSinhronizacija hook — posreduj čakajoče
+    loop Za vsak čakajoči zahtevek
+        MOB->>API: POST /tahograf/zacni ali zakljuci
+        API->>DB: INSERT/UPDATE TahografZapis
+        DB-->>API: OK
+        API-->>MOB: HTTP 201/200
+    end
+    MOB->>CACHE: izbrisiCakajoche()
+    MOB->>API: naloziPodatke() — osveži vse
 ```
 
 ### c) Uvoz DDD datoteke (web → API → Python → DB)
@@ -608,7 +617,7 @@ sequenceDiagram
 
 ---
 
-## 6. Varnost
+## 8. Varnost
 
 ### JWT avtentikacija
 
@@ -650,7 +659,7 @@ API ima konfigurirano CORS politiko za specifične dovoljene origine (produkcijs
 
 ---
 
-## 7. API referenca
+## 9. API referenca
 
 Vsi endpointi so na base poti `/api/v1`. JWT token se pošlje v `Authorization: Bearer <token>` headerju.
 
@@ -740,19 +749,18 @@ Vsi endpointi so na base poti `/api/v1`. JWT token se pošlje v `Authorization: 
 
 ### Vozni park
 
-| Metoda     | Pot               | Dostop | Opis                         |
-| ---------- | ----------------- | ------ | ---------------------------- |
-| GET/POST   | `/vozila`         | Admin  | Seznam/dodajanje vozil       |
-| PUT/DELETE | `/vozila/:id`     | Admin  | Urejanje/brisanje vozila     |
-| GET/POST   | `/tipi-vozil`     | Admin  | Kategorije vozil             |
-| PUT/DELETE | `/tipi-vozil/:id` | Admin  | Urejanje/brisanje kategorije |
+| Metoda     | Pot               | Dostop  | Opis                         |
+| ---------- | ----------------- | ------- | ---------------------------- |
+| GET/POST   | `/vozila`         | Voznik+ | Seznam/dodajanje vozil       |
+| PUT/DELETE | `/vozila/:id`     | Admin   | Urejanje/brisanje vozila     |
+| GET/POST   | `/tipi-vozil`     | Admin   | Kategorije vozil             |
+| PUT/DELETE | `/tipi-vozil/:id` | Admin   | Urejanje/brisanje kategorije |
 
-### Stranke in urnik
+### Stranke
 
 | Metoda              | Pot        | Dostop  | Opis            |
 | ------------------- | ---------- | ------- | --------------- |
-| GET/POST/PUT/DELETE | `/stranke` | Admin   | CRUD za stranke |
-| GET/POST/PUT/DELETE | `/urnik`   | Voznik+ | CRUD za urnike  |
+| GET/POST/PUT/DELETE | `/stranke` | Voznik+ | CRUD za stranke |
 
 ### Finance
 
@@ -785,21 +793,21 @@ Vsi endpointi so na base poti `/api/v1`. JWT token se pošlje v `Authorization: 
 
 ---
 
-## 8. Baza podatkov
+## 10. Baza podatkov
 
 ### Modeli in namen
 
-**Uporabnik** je centralna entiteta sistema. Poleg osnovnih profilnih podatkov vsebuje šifrirani EMŠO (`emso_crypted`) in FK na urno postavko (`fk_postavka`), ki se uporablja pri izračunu plače. Vloge so kodirane numerično (1/2/3) namesto z enum tipom, kar olajša razširitev v prihodnosti.
+**Uporabnik** je centralna entiteta sistema. Poleg osnovnih profilnih podatkov vsebuje šifrirani EMŠO (`emso_crypted`) za GDPR-skladno obdelavo PII. Vloge so kodirane numerično (1/2/3) namesto z enum tipom, kar olajša razširitev v prihodnosti brez migracije sheme.
 
-**Voznja** beleži posamezno delovno vožnjo voznika. Razlikuje se od `TahografZapis` po tem, da je ročni vnos voznika in vsebuje poslovne podatke (stranka, relacija, opis), medtem ko je tahograf tehnični zapis.
+**Voznja** beleži posamezno delovno vožnjo voznika. Vsebuje poslovne podatke (stranka, relacija, opis, cena, placano) in opcijske FK na `Vozilo` in `Stranka` za sledljivost virov. Polje `stranka_ime` omogoča zapis stranke kot prostega besedila, kadar stranka ni formalno registrirana v sistemu.
 
 **TahografZapis** ima poseben stolpec `vir` z vrednostma `POSNETO` ali `UVOZ`. To razlikovanje je kritično, ker EU regulativa zahteva sledljivost med ročno snemani in uvoženi podatki iz DDD čipa. Uvoženi podatki imajo absolutno prednost pred ročnimi vnosi pri morebitnih inšpekcijah.
 
-**Urnik** je M:N prehodna tabela med `Uporabnik`, `Vozilo` in `Stranka`, z dodatnimi polji (cena, naziv, placano). To je načrtovana denormalizacija — alternativa bi bila ločena tabela za vsako relacijo, kar bi zakompliciralo poizvedbe.
+**LOG_voznja** je audit tabela za beleženje sprememb. Vsebuje samo tiste podatke, ki so potrebni za rekonstrukcijo zgodovine (HTTP metoda, URL, ID vožnje, ID voznika). Ne vsebuje celotnih payloadov zahtevkov, ker bi to povzročilo prekomerno rast tabele.
 
-**LOG_voznja** je audit tabela za beleženje sprememb vožnje. Vsebuje samo tiste podatke, ki so potrebni za rekonstrukcijo zgodovine (HTTP metoda, URL, ID vožnje, ID voznika). Ne vsebuje celotnih payloadov zahtevkov, ker bi to povzročilo prekomerno rast tabele.
+**Vozilo / TipVozila** sta v relaciji 1:M — vsako vozilo spada v en tip. Ta normalizacija omogoča grupiranje statistik po tipu vozila brez podvajanja podatkov.
 
-**UrnaPostavka** je referenčna tabela z urnimi postavkami. Voznik ima FK nanjo, kar omogoča centralno upravljanje plačnih razredov brez potrebe po posodabljanju vsakega voznika posebej.
+**Stranka** shranjuje naročnike voženj. Ker je `fk_stranka` v `Voznja` opcijski, je mogoče beležiti vožnje brez formalno registrirane stranke (npr. interne vožnje).
 
 ### Indeksi
 
@@ -807,11 +815,13 @@ Priporočeni indeksi za produkcijsko delovanje:
 
 ```sql
 CREATE INDEX idx_voznja_fk_uporabnik ON "Voznja"(fk_uporabnik);
+CREATE INDEX idx_voznja_fk_vozilo ON "Voznja"(fk_vozilo);
+CREATE INDEX idx_voznja_fk_stranka ON "Voznja"(fk_stranka);
 CREATE INDEX idx_tahograf_fk_uporabnik ON "TahografZapis"(fk_uporabnik);
-CREATE INDEX idx_tahograf_zacetek ON "TahografZapis"(zacetek);
+CREATE INDEX idx_tahograf_stanje ON "TahografZapis"(stanje);
 CREATE INDEX idx_tahograf_vir ON "TahografZapis"(vir);
-CREATE INDEX idx_urnik_fk_uporabnik ON "Urnik"(fk_uporabnik);
-CREATE INDEX idx_log_voznja_id ON "LOG_voznja"(voznja_id_voznja);
+CREATE INDEX idx_log_voznja_timestamp ON "LOG_voznja"(timestamp);
+CREATE INDEX idx_log_voznja_uporabnik ON "LOG_voznja"(voznja_fk_uporabnik);
 ```
 
 ### Razlog za izbiro PostgreSQL
@@ -825,7 +835,204 @@ PostgreSQL 16 je bil izbran pred alternativami (MySQL, SQLite) zaradi:
 
 ---
 
-## 9. Razvoj in lokalna namestitev
+## 11. Arhitekturne odločitve
+
+Ta sekcija dokumentira ključne arhitekturne odločitve (Architecture Decision Records — ADR) s pojasnilom konteksta, alternativ in razlogov za vsako odločitev.
+
+### ADR-001: Monorepo struktura
+
+**Odločitev:** Vse tri komponente (`api/`, `web/`, `mobile/`) so v enem Git repozitoriju.
+
+**Kontekst:** Projekt ima tesno sklopljene komponente — vsaka sprememba API-ja zahteva usklajeno spremembo frontend-a ali mobilne aplikacije.
+
+**Alternative:** Ločeni repozitoriji za vsako komponento (polyrepo).
+
+**Razlog za izbiro monorepa:**
+
+- Atomarni commiti za medsebojno odvisne spremembe
+- Enotno sledenje nalogam in verzionam prek enega repozitorija
+- Poenostavljen CI/CD — en GitHub Actions konfiguracija za vse komponente
+
+**Kompromisi:** Večji repozitorij, potencialno daljši `git clone` — za projekt tega obsega ni relevantno.
+
+---
+
+### ADR-002: Fastify namesto Express
+
+**Odločitev:** Backend API temelji na Fastify 5.x, ne na bolj razširjenem Express.js.
+
+**Kontekst:** API mora biti zmogljiv pri obdelavi tahografskih uvozov (50MB multipart) in hkratnih zahtevkov od mobilne in spletne aplikacije.
+
+**Alternative:** Express.js (de-facto standard), Hono, NestJS.
+
+**Razlog za izbiro Fastify:**
+
+- Vgrajeni JSON Schema validacija za request/response
+- Avtomatska generacija Swagger dokumentacije iz shem
+- Plugin sistem (cryptoPlugin, prismaPlugin, auditPlugin) spodbuja modularnost
+- Zmogljivost: Fastify je ~35% hitrejši od Express pri JSON serializaciji
+
+---
+
+### ADR-003: Prisma ORM namesto raw SQL
+
+**Odločitev:** Vsi dostopi do baze gredo prek Prisma ORM-a.
+
+**Kontekst:** Baza ima 7 tabel z medsebojnimi relacijami. Ekipa ima različne stopnje izkušenj z SQL.
+
+**Alternative:** Raw SQL (pg driver), Knex.js, Drizzle ORM.
+
+**Razlog za izbiro Prisma:**
+
+- Type-safe poizvedbe preprečijo kategorijo runtime napak
+- Migracije (`prisma migrate dev`) zagotavljajo verzioniranje sheme
+- Prisma Studio poenostavi razvoj in debugging
+- Odlična integracija z Fly.io PostgreSQL
+
+---
+
+### ADR-004: Python subprocess za DDD/Excel parsing
+
+**Odločitev:** Binarni EU DDD tahografski format in Excel datoteke se razčlenijo prek Python subprocesov, ki jih Node.js zažene sinhrono.
+
+**Kontekst:** Node.js nima ustreznih knjižnic za EU DDD format; Python ima `tachograph-reader` in `openpyxl`.
+
+**Alternative:** Python mikroservis z REST/gRPC vmesnikom; Node.js implementacija binarnega parserja.
+
+**Razlog za izbiro subprocesov:**
+
+- Najhitreje implementirati brez vzdrževanja ločenega mikroservisa
+- Zadostuje za obseg uvozov (priložnostni admin uvozi)
+- Python rezultat (JSON array) je preprost za konsumpcijo v Node.js prek `stdout`
+
+**Kompromisi:** Vsak uvoz doda ≈1-2s latency za inicializacijo Python procesa.
+
+---
+
+### ADR-005: JWT brez server-side shranjevanja tokenov
+
+**Odločitev:** Access tokeni (8h) so stateless JWT; refresh tokeni so hranjeni na strani odjemalca.
+
+**Kontekst:** Sistem mora podpirati mobilne odjemalce z intermitentno povezavo.
+
+**Alternative:** Server-side session shranjevanje (Redis), opaque tokeni.
+
+**Razlog za izbiro stateless JWT:**
+
+- Brez potrebe po Redis infrastrukturi za ta obseg projekta
+- Horizontalna skalabilnost brez deljene seje
+- Eksplicitna veljavnost (8h) zmanjša tveganje pri kompromitiranem tokenu
+
+**Kompromisi:** Ni možnosti takojšnje invalidacije tokena pred potekom.
+
+---
+
+### ADR-006: Fly.io namesto AWS/Azure/GCP
+
+**Odločitev:** Produkcijsko okolje je Fly.io v regiji Frankfurt (fra).
+
+**Kontekst:** Sistem obdeluje EMŠO (PII) in mora biti skladen z EU GDPR — podatki morajo ostati v EU.
+
+**Alternative:** AWS EU, Heroku, DigitalOcean.
+
+**Razlog za izbiro Fly.io:**
+
+- Nativna podpora za Dockerfile deploy brez kompleksne konfiguracije
+- Integriran PostgreSQL addon v isti regiji (brez cross-region latency)
+- Avtomatski TLS certifikati
+- GitHub Actions integracija prek `flyctl` je enostavna
+
+---
+
+### ADR-007: AsyncStorage offline cache za tahograf (mobilna aplikacija)
+
+**Odločitev:** Mobilna aplikacija shranjuje tahografska stanja lokalno v `AsyncStorage` prek `tahografCache.js` ob izpadu internetne povezave.
+
+**Kontekst:** Vozniki pogosto delajo na lokacijah z nezanesljivo internetno pokritostjo. EU regulativa zahteva neprekinjeno beleženje tahografskih stanj.
+
+**Alternative:** Zahtevati stalno internetno povezavo; SharedWorker za background sync.
+
+**Razlog za izbiro AsyncStorage offline casha:**
+
+- `useSinhronizacija` hook zazna vzpostavitev povezave in avtomatsko posreduje čakajoče zahtevke v pravilnem vrstnem redu
+- Voznik dobi takojšen vizualni feedback (timer teče) tudi brez povezave
+- Registrska številka vozila se persistira med menjava stanj, kar odpravi ponavljajoče vnose
+
+**Kompromisi:** Čakajoči zahtevki se izgubijo ob prisilnem zaprtju aplikacije pred sinhronizacijo.
+
+---
+
+### ADR-008: Numerične vloge namesto enum
+
+**Odločitev:** Polje `dostop` v tabeli `Uporabnik` shranjuje numerično vrednost (1, 2, 3) namesto string enum-a.
+
+**Kontekst:** Sistem ima 3 vloge z hierarhičnim dostopom.
+
+**Alternative:** PostgreSQL ENUM tip, string vrednosti.
+
+**Razlog za numerične vrednosti:**
+
+- Enostavno preverjanje hierarhičnih pravic: `dostop >= 2`
+- Dodajanje nove vloge ne zahteva migracije sheme
+- JWT payload je manjši z numeričnim tipom
+
+---
+
+## 12. Vodenje projekta
+
+### Organizacija dela
+
+Projekt je bil organiziran po **Kanban metodologiji** z uporabo GitHub Projects orodja za sledenje nalogam.
+
+**Repozitorij:** [https://github.com/Valeri123car/Projekt2026](https://github.com/Valeri123car/Projekt2026)
+
+### Delitev nalog
+
+| Področje                                | Odgovorna oseba(e)            |
+| --------------------------------------- | ----------------------------- |
+| Backend API (Fastify, Prisma, routes)   | Valeri Kamburov, Luka Crešnar |
+| Spletna aplikacija (React, dashboard)   | Valeri Kamburov, Rok Krajnc   |
+| Mobilna aplikacija (React Native, Expo) | Valeri Kamburov, Rok Krajnc   |
+| Baza podatkov (shema, migracije)        | Luka Crešnar, Valeri Kamburov |
+| Varnost (JWT, RBAC, GDPR, šifriranje)   | Valeri Kamburov               |
+| CI/CD pipeline (GitHub Actions, Fly.io) | Valeri Kamburov               |
+| Testiranje (ročno, Vitest, SonarCloud)  | Vsi člani                     |
+| Dokumentacija                           | Vsi člani                     |
+
+### Git workflow
+
+Projekt sledi **trunk-based development** z `main` kot edino produkcijsko vejo. Vsak commit na `main` sproži avtomatski deploy na Fly.io.
+
+```mermaid
+gitGraph
+   commit id: "init: projekt scaffold"
+   commit id: "feat: auth JWT + RBAC"
+   commit id: "feat: tahograf recording"
+   commit id: "feat: offline cache + sync"
+   commit id: "feat: DDD import Python"
+   commit id: "feat: admin dashboard"
+   commit id: "feat: mobilna app"
+   commit id: "feat: SonarCloud CI"
+   commit id: "refactor: unified voznja schema"
+   commit id: "fix: dropdown vozilo/stranka"
+```
+
+### Mejniki projekta
+
+| Faza                   | Opis                                            | Status     |
+| ---------------------- | ----------------------------------------------- | ---------- |
+| Analiza in načrtovanje | Definicija zahtev, UML diagrami, shema baze     | Zaključeno |
+| Backend API            | Vsi endpointi, JWT auth, RBAC, Prisma migracije | Zaključeno |
+| Spletna aplikacija     | Dashboard, vožnje, admin panel, DDD uvoz        | Zaključeno |
+| Mobilna aplikacija     | Tahograf, offline cache, Google Calendar        | Zaključeno |
+| Varnost in GDPR        | AES-256 šifriranje, audit log, rate limiting    | Zaključeno |
+| Deployment             | Fly.io produkcija, GitHub Actions CI/CD         | Zaključeno |
+| Testiranje             | Vitest, SonarCloud analiza, ročno testiranje    | Zaključeno |
+| Dokumentacija          | README, UML diagrami, SUS testiranje            | V teku     |
+
+---
+
+## 13. Razvoj in lokalna namestitev
 
 ### Predpogoji
 
@@ -851,7 +1058,6 @@ docker compose up -d
 cd api
 cp .env.example .env
 # Uredi .env z lokalnimi vrednostmi
-
 npm install
 
 # 4. Migracija baze podatkov
@@ -908,11 +1114,63 @@ npx expo start
 
 ---
 
-## 10. Deployment
+## 14. Deployment
+
+### UML Deployment diagram
+
+```mermaid
+graph TB
+    subgraph Dev["Razvijalčev računalnik"]
+        DEVNODE["Node.js 20\nnpm run dev"]
+        DEVWEB["Vite Dev Server\nlocalhost:5173"]
+        DEVM["Expo Dev Server\nlocalhost:19006"]
+        DEVPG["Docker Compose\nPostgreSQL 16\nlocalhost:5433"]
+    end
+
+    subgraph GitHub["GitHub (github.com)"]
+        REPO["Git Repozitorij\nValeri123car/Projekt2026"]
+        GHA1["Actions: deploy.yml\nAPI deploy"]
+        GHA2["Actions: deploy-web.yml\nWeb deploy"]
+        GHA3["Actions: sonar.yml\nSonarCloud analiza"]
+    end
+
+    subgraph FlyIO["Fly.io — Frankfurt (fra)"]
+        subgraph APINODE["API Node (projekt2026.fly.dev)"]
+            CONT1["Docker Container\nnode:20-alpine + Python3\nFastify 5.8.5 :3000"]
+        end
+        subgraph WEBNODE["Web Node (sirena-web.fly.dev)"]
+            CONT2["Docker Container\nnginx:alpine\nReact 19 SPA"]
+        end
+        subgraph DBNODE["Database Node"]
+            PG["Fly Postgres\nPostgreSQL 16\n(privaten, samo API dostop)"]
+        end
+    end
+
+    subgraph Odjemalci["Odjemalci"]
+        BROWSER["Spletni brskalnik\nHTTPS sirena-web.fly.dev"]
+        MOBILE["Mobilna naprava\nExpo Go / APK"]
+    end
+
+    SONAR["SonarCloud\nCloud analiza kakovosti"]
+
+    REPO -->|push na main| GHA1
+    REPO -->|push na main + web/** filter| GHA2
+    REPO -->|push/PR na main| GHA3
+    GHA1 -->|flyctl deploy| CONT1
+    GHA2 -->|flyctl deploy| CONT2
+    GHA3 -->|analiza| SONAR
+
+    BROWSER -->|HTTPS :443| CONT2
+    MOBILE -->|HTTPS :443| CONT1
+    CONT2 -->|REST API HTTPS| CONT1
+    CONT1 -->|TCP :5432 interno| PG
+
+    DEVNODE -.->|razvoj| DEVPG
+    DEVWEB -.->|proxy /api → localhost:3000| DEVNODE
+    DEVM -.->|REST API| DEVNODE
+```
 
 ### CI/CD pipeline
-
-GitHub Actions pipeline skrbi za avtomatski deploy na Fly.io ob vsakem pushu na `main` vejo. Web aplikacija se deploya samo ob spremembi datotek v mapi `web/**`, da se prepreči nepotrebni redeploy.
 
 ```mermaid
 flowchart TD
@@ -934,54 +1192,21 @@ flowchart TD
     A4 & W4 --> DONE[Produkcija posodobljena]
 ```
 
-### GitHub Actions konfiguracija
-
-Workflow datoteke se nahajajo v `.github/workflows/`:
-
-- `deploy.yml` — deploy API-ja ob vsakem pushu na `main`
-- `deploy-web.yml` — deploy spletne aplikacije samo ob spremembi `web/**` datotek
-
 Secrets, ki morajo biti konfigurirani v GitHub repozitoriju:
 
 - `FLY_API_TOKEN` — Fly.io API token za avtentikacijo `flyctl` ukaza
 
-### Fly.io konfiguracija
-
-Vsaka aplikacija (API in Web) ima svojo `fly.toml` konfiguracijsko datoteko. Fly.io skrbi za:
-
-- SSL/TLS certifikate (Let's Encrypt)
-- Avtomatsko skaliranje
-- Health check monitoring (`/health` endpoint)
-- PostgreSQL addon (produkcijska baza)
-
-Produkcijska URL: `https://projekt2026.fly.dev`
-
-### Lokalni razvoj vs produkcija
-
-| Okolje     | PostgreSQL     | API              | Web              |
-| ---------- | -------------- | ---------------- | ---------------- |
-| Lokalno    | Docker Compose | `npm run dev`    | `npm run dev`    |
-| Produkcija | Fly.io managed | Fly.io container | Fly.io container |
-
 ---
 
-## 11. Zagotavljanje kakovosti
-
-### Monorepo struktura
-
-Projekt je organiziran kot monorepo z ločenimi mapami za `api/`, `web/` in `mobile/`. Prednosti tega pristopa:
-
-- En repozitorij za vse komponente poenostavi koordinacijo sprememb (npr. API sprememba + frontend posodobitev v enem PR-ju)
-- Deljene TypeScript tipe bi bilo mogoče izluščiti v skupno mapo `shared/`
-- Jasna ločitev odgovornosti med komponentami
+## 15. Zagotavljanje kakovosti
 
 ### Audit logging
 
-Audit log je implementiran kot Fastify `onResponse` hook, kar pomeni, da se beleži samo uspešno zaključene zahtevke. To je zavestna odločitev — neuspele zahtevke (npr. 401, 403) ni smiselno beležiti, ker ne spremenijo stanja podatkov. Beleži se: `timestamp`, HTTP metoda, URL, ID vožnje (kjer relevantno) in ID voznika iz JWT tokena.
+Audit log je implementiran kot Fastify `onResponse` hook, kar pomeni, da se beležijo samo uspešno zaključeni zahtevki. Beleži se: `timestamp`, HTTP metoda, URL, ID vožnje (kjer relevantno) in ID voznika iz JWT tokena.
 
 ### Swagger dokumentacija
 
-API je dokumentiran s Swagger UI, dostopnim na `/docs`. Generira se avtomatsko iz Fastify JSON Schema definicij v route moduli (`api/src/schemas/`). Dostop je zaščiten z basic auth, da se prepreči razkritje API strukture nepooblaščenim osebam. Za razvijalce je Swagger ključno orodje za testiranje endpointov brez potrebe po Postman kolekcijah.
+API je dokumentiran s Swagger UI, dostopnim na `/docs`. Generira se avtomatsko iz Fastify JSON Schema definicij. Dostop je zaščiten z basic auth.
 
 ### Error handling
 
@@ -995,50 +1220,44 @@ API sledi enotnemu formatu napak:
 }
 ```
 
-Fastify-jev vgrajeni error handler se dopolni z domačimi validacijskimi napakami iz Prisma ORM-a (npr. `P2002` za unique constraint violations).
-
 ### Rate limiting
 
 Dvonivojski rate limiting ščiti sistem pred zlorabo:
 
-- **Globalni limit** (100 req/min): ščiti pred DoS napadi in prekomerno obremenitvijo baze
+- **Globalni limit** (100 req/min): ščiti pred DoS napadi
 - **Login limit** (3 req/min): ščiti pred brute-force napadi na gesla
 
-### Priporočila za testiranje
+### SonarCloud analiza kakovosti kode
 
-Ker projekt nima implementiranih avtomatiziranih testov, so tukaj predlogi za prihodnje:
+Koda se avtomatsko analizira ob vsakem pushu/PR na `main` prek `sonar.yml` GitHub Actions workflow-a. SonarCloud analizira varnostne ranljivosti, code smells, pokritost s testi in podvajanje kode.
 
-**Unit testi** (Jest + Prisma mock):
+### Ročno testiranje
 
-- `crypto.js` plugin: test šifriranja/dešifriranja EMŠO
-- Rate limiting logika
-- JWT generiranje in validacija
-
-**Integration testi** (Fastify inject):
-
-- Login flow s pravilnimi/napačnimi kredenciali
-- RBAC: preveriti, da voznik ne more dostopati do admin endpointov (pričakovan HTTP 403)
-- Tahograf: začetek → zaključek → preveriti trajanje_min
-
-**E2E testi** (Playwright za web, Detox za mobile):
-
-- Celoten login → dodajanje vožnje → odjava scenarij
-- Uvoz DDD datoteke → preveriti uvožene zapise
+| Scenarij                                | Vloga  | Pričakovani izid                              |
+| --------------------------------------- | ------ | --------------------------------------------- |
+| Prijava z napačnim geslom (3×)          | Vsi    | HTTP 429 po 3. poskusu                        |
+| Voznik dostopa do `/admin/vozniki`      | Voznik | HTTP 403 Forbidden                            |
+| Uvoz veljavne DDD datoteke              | Admin  | Pravilno število uvoženih zapisov             |
+| GDPR brisanje (DELETE /auth/me)         | Voznik | Anonimizacija PII v bazi                      |
+| Zagon tahografa brez aktivnega stanja   | Voznik | HTTP 201, nov zapis                           |
+| Zagon tahografa z aktivnim stanjem      | Voznik | HTTP 409 Conflict                             |
+| Menjava stanja brez internetne povezave | Voznik | Shrani lokalno, timer teče                    |
+| Vzpostavitev povezave po offline        | Voznik | Avtomatska sinhronizacija čakajočih zahtevkov |
 
 ---
 
-## 12. Znane omejitve
+## 16. Znane omejitve
 
-- **Ni avtomatiziranih testov** — sistem nima unit, integration ali E2E testov. Vse testiranje je bilo ročno.
+- **Offline podpora je omejena na tahografska stanja** — mobilna aplikacija podpira offline beleženje tahografskih stanj prek lokalnega `AsyncStorage` casha z avtomatsko sinhronizacijo. Ročni vnos vožnje (`NovaVoznjaScreen`) zahteva aktivno internetno povezavo. Čakajoči zahtevki se izgubijo ob prisilnem zaprtju aplikacije pred sinhronizacijo.
 - **Mock lokacije na dashboardu** — Leaflet karta na admin dashboardu prikazuje zadnje znane lokacije voznikov iz tahografskih zapisov, ki niso nujno v realnem času. Prava real-time sledenje bi zahtevalo WebSocket ali SSE integracijo.
-- **Python subprocess overhead** — vsak uvoz DDD datoteke zažene nov Python proces, kar doda latency (≈1-2s). Za produkcijo z veliko uvoži bi bila boljša rešitev Python mikroservis z gRPC ali REST vmesnikom.
+- **Python subprocess overhead** — vsak uvoz DDD datoteke zažene nov Python proces (~1-2s latency). Za produkcijo z veliko uvoži bi bila boljša rešitev Python Worker Service z message queue.
 - **Refresh token brez rotacije** — trenutna implementacija ne rotira refresh tokenov ob vsaki uporabi, kar zmanjšuje varnost pri kraji tokena.
-- **Ni offline podpore za mobilno** — mobilna aplikacija zahteva aktivno internetno povezavo. Tahografski zapisi se ne shranjujejo lokalno ob izpadu povezave.
 - **EMŠO šifrirni ključ v env** — ključ za AES-256-GCM je shranjen v okoljski spremenljivki, ne v namenski key management rešitvi (npr. HashiCorp Vault, AWS KMS).
+- **Tehnični dolg v shemi** — polja `aktivnost`, `registerska`, `posadka`, `trajanje` so bila del originalnega `Voznja` modela in so bila odstranjena v refactoringu. Migracija je čista, ampak obstoječi podatki iz pred-migracijske faze nimajo `fk_vozilo` in `fk_stranka` vrednosti.
 
 ---
 
-## 13. Diagrami aktivnosti
+## 7. Diagrami aktivnosti
 
 ### Pregled vožnj
 
@@ -1053,8 +1272,6 @@ flowchart TD
     E --> EN([Konec])
     F --> EN
 ```
-
----
 
 ### Prijava
 
@@ -1077,7 +1294,27 @@ flowchart TD
     K --> EN
 ```
 
----
+### Offline tahograf beleženje
+
+```mermaid
+flowchart TD
+    S([Začetek]) --> A[Voznik izbere novo stanje]
+    A --> B[Shrani lokalno\ntahografCache.js]
+    B --> C{Internetna\npovezava?}
+    C -->|Da| D[POST /tahograf/zacni]
+    D --> E{API uspešen?}
+    E -->|Da| F[Posodobi lokalni cache\ns serverskim zapisom]
+    E -->|Ne| G[Dodaj v čakajočo vrsto\ndodajCakajoci]
+    C -->|Ne| G
+    G --> H[Prikaži timer\niz lokalnega stanja]
+    F --> H
+    H --> I{Vzpostavitev\npovezave?}
+    I -->|Da| J[useSinhronizacija hook]
+    J --> K[Posreduj čakajoče\nzahtevke po vrsti]
+    K --> L[Osveži podatke iz API]
+    L --> EN([Konec])
+    I -->|Ne| H
+```
 
 ### Izvoz delovnega zapisa (Excel)
 
@@ -1106,9 +1343,9 @@ flowchart TD
 
 ---
 
-## 14. Testiranje uporabniške izkušnje (SUS)
+## 17. Testiranje uporabniške izkušnje (SUS)
 
-Uporabniška izkušnja sistema je bila ocenjena z uveljavljenim **SUS vprašalnikom** (System Usability Scale), ki je standardiziran instrument za merjenje zaznanega ravni uporabnosti programskih rešitev. Vprašalnik je bil posredovan reprezentativnemu vzorcu dejanskih ali potencialnih uporabnikov sistema (vozniki, administrativno osebje).
+Uporabniška izkušnja sistema je bila ocenjena z uveljavljenim **SUS vprašalnikom** (System Usability Scale), ki je standardiziran instrument za merjenje zaznanega ravni uporabnosti programskih rešitev.
 
 ### Metodologija
 
@@ -1160,22 +1397,5 @@ SUS ocena se izračuna po standardni formuli:
 | Razred uporabnosti       | _??_     |
 | Najnižja ocena (trditev) | _??_     |
 | Najvišja ocena (trditev) | _??_     |
-
-#### Povprečne ocene po trditvi
-
-| #   | Trditev                                                                         | Povp. ocena (1–5) |
-| --- | ------------------------------------------------------------------------------- | ----------------- |
-| 1   | Menim, da bi ta sistem rad pogosto uporabljal.                                  | _??_              |
-| 2   | Sistem se mi je zdel po nepotrebnem zapleten.                                   | _??_              |
-| 3   | Sistem se mi je zdel enostaven za uporabo.                                      | _??_              |
-| 4   | Menim, da bi za uporabo tega sistema potreboval pomoč tehnika.                  | _??_              |
-| 5   | Različne funkcije tega sistema so se mi zdele dobro povezane v smiselno celoto. | _??_              |
-| 6   | Sistem se mi je zdel preveč nekonsistenten.                                     | _??_              |
-| 7   | Menim, da bi se večina uporabnikov zelo hitro naučila uporabljati ta sistem.    | _??_              |
-| 8   | Sistem se mi je zdel neroden za uporabo.                                        | _??_              |
-| 9   | Pri uporabi sistema sem bil zelo suveren.                                       | _??_              |
-| 10  | Preden sem osvojil uporabo tega sistema, sem se moral naučiti veliko stvari.    | _??_              |
-
-#### Ugotovitve in ukrepi
 
 > _[Po izvedbi testiranja: napiši 3–5 ključnih ugotovitev in konkretnih ukrepov za izboljšanje UX na osnovi zbranih podatkov.]_
