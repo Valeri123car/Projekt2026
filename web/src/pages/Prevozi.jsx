@@ -65,20 +65,21 @@ function SeznamGumb({ idKey, labelFn, subLabelFn, ikona, v, zasedeni, selected, 
   const zasedeno   = zasedeni.includes(v[idKey]);
   const isSelected = selected === String(v[idKey]);
 
-  const buttonClass = zasedeno
-    ? 'border-slate-200 bg-slate-50 opacity-40 cursor-not-allowed'
+  const buttonClass = isSelected && zasedeno
+    ? 'border-orange-400 bg-orange-50 text-orange-900'
+    : zasedeno
+    ? 'border-yellow-300 bg-yellow-50/60 hover:border-yellow-400 hover:bg-yellow-50 cursor-pointer'
     : isSelected
     ? 'border-blue-500 bg-blue-50 text-blue-800'
     : 'border-slate-300 bg-white hover:border-blue-300 hover:bg-blue-50/30 cursor-pointer';
 
-  const ikonaClass = isSelected ? 'text-blue-600' : 'text-slate-400';
+  const ikonaClass = isSelected ? (zasedeno ? 'text-orange-500' : 'text-blue-600') : 'text-slate-400';
 
   return (
     <button
       key={v[idKey]}
       type="button"
-      disabled={zasedeno}
-      onClick={() => { if (!zasedeno) setSelected(String(v[idKey])); }}
+      onClick={() => setSelected(String(v[idKey]))}
       className={`w-full flex items-center justify-between rounded-lg border px-4 py-2.5 text-sm text-left transition-colors ${buttonClass}`}
     >
       <div className="flex items-center gap-2">
@@ -88,7 +89,12 @@ function SeznamGumb({ idKey, labelFn, subLabelFn, ikona, v, zasedeni, selected, 
           {subLabelFn && <p className="text-[11px] text-slate-500">{subLabelFn(v)}</p>}
         </div>
       </div>
-      {zasedeno && <span className="text-[11px] font-semibold text-red-400">ZASEDENO</span>}
+      {zasedeno && (
+        <span className={`inline-flex items-center gap-1 text-[11px] font-semibold ${isSelected ? 'text-orange-500' : 'text-yellow-600'}`}>
+          <span className="material-symbols-outlined text-[13px]">warning</span>
+          ZASEDENO
+        </span>
+      )}
       {!zasedeno && isSelected && <span className="material-symbols-outlined text-[18px] text-blue-600">check_circle</span>}
     </button>
   );
