@@ -388,7 +388,11 @@ export default function UrnikScreen() {
                     {zapis.konec ? formatCas(zapis.konec) : "..."}
                   </Text>
                   {zapis.stranka && (
-                    <Text style={s.zapisReg}>{zapis.stranka}</Text>
+                    <Text style={s.zapisReg}>
+                      {typeof zapis.stranka === "object"
+                        ? zapis.stranka.naziv
+                        : zapis.stranka}
+                    </Text>
                   )}
                   {zapis.registrska && !zapis.stranka && (
                     <Text style={s.zapisReg}>{zapis.registrska}</Text>
