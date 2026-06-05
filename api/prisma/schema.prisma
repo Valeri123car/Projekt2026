@@ -7,14 +7,6 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model UrnaPostavka {
-  id_postavka Int         @id @default(autoincrement())
-  postavka    Float
-  users       Uporabnik[]
-
-  @@map("urna_postavka")
-}
-
 model Uporabnik {
   id_uporabnik    Int             @id @default(autoincrement())
   ime             String          @db.VarChar(45)
@@ -23,17 +15,12 @@ model Uporabnik {
   dostop          Int             @default(1)
   email           String          @unique @db.VarChar(100)
   geslo           String          @db.VarChar(255)
-  fk_postavka     Int?
-  postavka        UrnaPostavka?   @relation(fields: [fk_postavka], references: [id_postavka])
   voznje          Voznja[]
   urniki          Urnik[]
-  racuni          Racun[]
   gdpr_soglasje   Boolean         @default(false)
   gdpr_datum      DateTime?
   tahograf_zapisi TahografZapis[]
   logs            LOG_voznja[]
-
-  @@index([fk_postavka])
 }
 
 model Voznja {
@@ -116,16 +103,6 @@ model LOG_voznja {
   @@index([timestamp])
 }
 
-model Racun {
-  idRacun      Int       @id @default(autoincrement())
-  datum_izdaje DateTime  @db.Date
-  st_ur        Float
-  placa        Float
-  fk_uporabnik Int
-  uporabnik    Uporabnik @relation(fields: [fk_uporabnik], references: [id_uporabnik])
-
-  @@index([fk_uporabnik])
-}
 
 model TahografZapis {
   id_zapis        Int       @id @default(autoincrement())
