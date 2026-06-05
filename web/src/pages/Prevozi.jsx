@@ -31,6 +31,18 @@ const toInputTime = (v) => {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 };
 
+function buildTimestamps(datum, uraZacetek, uraKonec) {
+  const [hz, mz] = uraZacetek.split(':');
+  const [hk, mk] = uraKonec.split(':');
+  const zacetek = `${datum}T${hz.padStart(2, '0')}:${mz.padStart(2, '0')}:00`;
+  const zacMs = parseInt(hz) * 60 + parseInt(mz);
+  const koncMs = parseInt(hk) * 60 + parseInt(mk);
+  const koncDatum = koncMs <= zacMs
+    ? new Date(new Date(datum).getTime() + 86400000).toISOString().split('T')[0]
+    : datum;
+  return { zacetek, konc: `${koncDatum}T${hk.padStart(2, '0')}:${mk.padStart(2, '0')}:00` };
+}
+
 function PrevozModal({ mode, prevoz, onClose, onSaved }) {
   const isEdit = mode === 'edit';
 
@@ -75,9 +87,11 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
 
   useEffect(() => {
     if (!datum) { setZasedeniVozniki([]); setZasedeniVozila([]); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(datum)) return;
     const check = async () => {
       try {
-        const res = await api.get(`/admin/voznje?od=${datum}&do=${datum}`);
+        const params = new URLSearchParams({ od: datum, do: datum });
+        const res = await api.get(`/admin/voznje?${params.toString()}`);
         const prevozi = (res.data || []).filter((p) =>
           isEdit ? p.id_voznja !== prevoz.id_voznja : true
         );
@@ -97,20 +111,32 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
     check();
   }, [datum, uraZacetek, uraKonec]);
 
+  const handleSaveNovaStranka = async () => {
+    setNovaStrankaSaving(true);
+    try {
+      const res = await api.post('/admin/stranke', {
+        naziv: novaStrankaData.naziv.trim(),
+        email: novaStrankaData.email || undefined,
+        telefonska: novaStrankaData.telefonska || undefined,
+        davcna_st: novaStrankaData.davcna_st ? parseInt(novaStrankaData.davcna_st) : undefined,
+      });
+      setStrankeList((prev) => [...prev, res.data].sort((a, b) => a.naziv.localeCompare(b.naziv)));
+      setSelectedStranka(String(res.data.id_stranka));
+      setNovaStrankaOpen(false);
+      setNovaStrankaData({ naziv: '', email: '', telefonska: '', davcna_st: '' });
+    } catch {
+      setError('Napaka pri ustvarjanju stranke.');
+    } finally {
+      setNovaStrankaSaving(false);
+    }
+  };
+
   const handleSubmit = async () => {
     setError(null);
     if (!datum)           return setError('Datum je obvezen.');
     if (!selectedVoznik)  return setError('Izberite voznika.');
 
-    const [hz, mz] = uraZacetek.split(':');
-    const [hk, mk] = uraKonec.split(':');
-    const zacetek = `${datum}T${hz.padStart(2, '0')}:${mz.padStart(2, '0')}:00`;
-    const zacMs   = parseInt(hz) * 60 + parseInt(mz);
-    const koncMs  = parseInt(hk) * 60 + parseInt(mk);
-    const koncDatum = koncMs <= zacMs
-      ? new Date(new Date(datum).getTime() + 86400000).toISOString().split('T')[0]
-      : datum;
-    const konc = `${koncDatum}T${hk.padStart(2, '0')}:${mk.padStart(2, '0')}:00`;
+    const { zacetek, konc } = buildTimestamps(datum, uraZacetek, uraKonec);
 
     try {
       setSaving(true);
@@ -139,6 +165,8 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
       setSaving(false);
     }
   };
+
+  const submitLabel = isEdit ? 'Shrani spremembe' : 'Dodaj prevoz';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
@@ -279,25 +307,7 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
                   type="number"
                   className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                 <button type="button" disabled={novaStrankaSaving || !novaStrankaData.naziv.trim()}
-                  onClick={async () => {
-                    setNovaStrankaSaving(true);
-                    try {
-                      const res = await api.post('/admin/stranke', {
-                        naziv: novaStrankaData.naziv.trim(),
-                        email: novaStrankaData.email || undefined,
-                        telefonska: novaStrankaData.telefonska || undefined,
-                        davcna_st: novaStrankaData.davcna_st ? parseInt(novaStrankaData.davcna_st) : undefined,
-                      });
-                      setStrankeList((prev) => [...prev, res.data].sort((a, b) => a.naziv.localeCompare(b.naziv)));
-                      setSelectedStranka(String(res.data.id_stranka));
-                      setNovaStrankaOpen(false);
-                      setNovaStrankaData({ naziv: '', email: '', telefonska: '', davcna_st: '' });
-                    } catch {
-                      setError('Napaka pri ustvarjanju stranke.');
-                    } finally {
-                      setNovaStrankaSaving(false);
-                    }
-                  }}
+                  onClick={handleSaveNovaStranka}
                   className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
                   {novaStrankaSaving ? 'Shranjujem...' : 'Ustvari stranko'}
                 </button>
@@ -345,7 +355,7 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
           <button type="button" onClick={handleSubmit} disabled={saving}
             className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-5 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-60">
             <span className="material-symbols-outlined text-[16px]">save</span>
-            {saving ? 'Shranjujem...' : isEdit ? 'Shrani spremembe' : 'Dodaj prevoz'}
+            {saving ? 'Shranjujem...' : submitLabel}
           </button>
         </div>
       </div>
