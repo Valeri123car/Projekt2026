@@ -1329,24 +1329,39 @@ Uporabniška izkušnja sistema je bila ocenjena z uveljavljenim **SUS vprašalni
 
 - **Instrument:** System Usability Scale (Brooke, 1996) — 10 trditev, 5-stopenjska Likertova lestvica
 - **Lestvica:** 1 = Sploh se ne strinjam → 5 = Popolnoma se strinjam
-- **Vzorec:** N = 3
+- **Vzorec:** N = 2
 - **Datum izvedbe:** 5.06.2026
 - **Ciljne vloge:** Voznik (mobilna app), Admin (spletna app)
 
-### Vprašalnik
+### Vprašalnik — Mobilna aplikacija (Voznik)
 
 | #   | Trditev                                                                         | 1 — Sploh se ne strinjam |  2  |  3  |  4  | 5 — Popolnoma se strinjam |
 | --- | ------------------------------------------------------------------------------- | :----------------------: | :-: | :-: | :-: | :-----------------------: |
 | 1   | Menim, da bi ta sistem rad pogosto uporabljal.                                  |            ☐             |  ☐  |  ☐  |  ☐  |             X             |
-| 2   | Sistem se mi je zdel po nepotrebnem zapleten.                                   |            ☐             |  X  |  ☐  |  ☐  |             ☐             |
+| 2   | Sistem se mi je zdel po nepotrebnem zapleten.                                   |            X             |  ☐  |  ☐  |  ☐  |             ☐             |
 | 3   | Sistem se mi je zdel enostaven za uporabo.                                      |            ☐             |  ☐  |  ☐  |  ☐  |             X             |
-| 4   | Menim, da bi za uporabo tega sistema potreboval pomoč tehnika.                  |            ☐             |  ☐  |  ☐  |  X  |             ☐             |
+| 4   | Menim, da bi za uporabo tega sistema potreboval pomoč tehnika.                  |            X             |  ☐  |  ☐  |  ☐  |             ☐             |
 | 5   | Različne funkcije tega sistema so se mi zdele dobro povezane v smiselno celoto. |            ☐             |  ☐  |  ☐  |  ☐  |             X             |
+| 6   | Sistem se mi je zdel preveč nekonsistenten.                                     |            X             |  ☐  |  ☐  |  ☐  |             ☐             |
+| 7   | Menim, da bi se večina uporabnikov zelo hitro naučila uporabljati ta sistem.    |            ☐             |  ☐  |  ☐  |  ☐  |             X             |
+| 8   | Sistem se mi je zdel neroden za uporabo.                                        |            X             |  ☐  |  ☐  |  ☐  |             ☐             |
+| 9   | Pri uporabi sistema sem bil zelo suveren.                                       |            ☐             |  ☐  |  ☐  |  ☐  |             X             |
+| 10  | Preden sem osvojil uporabo tega sistema, sem se moral naučiti veliko stvari.    |            X             |  ☐  |  ☐  |  ☐  |             ☐             |
+
+### Vprašalnik — Spletna aplikacija (Admin)
+
+| #   | Trditev                                                                         | 1 — Sploh se ne strinjam |  2  |  3  |  4  | 5 — Popolnoma se strinjam |
+| --- | ------------------------------------------------------------------------------- | :----------------------: | :-: | :-: | :-: | :-----------------------: |
+| 1   | Menim, da bi ta sistem rad pogosto uporabljal.                                  |            ☐             |  ☐  |  ☐  |  X  |             ☐             |
+| 2   | Sistem se mi je zdel po nepotrebnem zapleten.                                   |            X             |  ☐  |  ☐  |  ☐  |             ☐             |
+| 3   | Sistem se mi je zdel enostaven za uporabo.                                      |            ☐             |  ☐  |  ☐  |  ☐  |             X             |
+| 4   | Menim, da bi za uporabo tega sistema potreboval pomoč tehnika.                  |            X             |  ☐  |  ☐  |  ☐  |             ☐             |
+| 5   | Različne funkcije tega sistema so se mi zdele dobro povezane v smiselno celoto. |            ☐             |  ☐  |  ☐  |  X  |             ☐             |
 | 6   | Sistem se mi je zdel preveč nekonsistenten.                                     |            ☐             |  X  |  ☐  |  ☐  |             ☐             |
 | 7   | Menim, da bi se večina uporabnikov zelo hitro naučila uporabljati ta sistem.    |            ☐             |  ☐  |  ☐  |  X  |             ☐             |
 | 8   | Sistem se mi je zdel neroden za uporabo.                                        |            X             |  ☐  |  ☐  |  ☐  |             ☐             |
-| 9   | Pri uporabi sistema sem bil zelo suveren.                                       |            ☐             |  ☐  |  ☐  |  X  |             ☐             |
-| 10  | Preden sem osvojil uporabo tega sistema, sem se moral naučiti veliko stvari.    |            ☐             |  ☐  |  ☐  |  X  |             ☐             |
+| 9   | Pri uporabi sistema sem bil zelo suveren.                                       |            ☐             |  ☐  |  ☐  |  ☐  |             X             |
+| 10  | Preden sem osvojil uporabo tega sistema, sem se moral naučiti veliko stvari.    |            X             |  ☐  |  ☐  |  ☐  |             ☐             |
 
 ### Izračun SUS ocene
 
@@ -1366,17 +1381,15 @@ SUS ocena se izračuna po standardni formuli:
 
 ### Rezultati
 
-> **Opomba:** Spodnja tabela bo dopolnjena po izvedbi testiranja z dejanskimi udeleženci.
+| Metrika                  | Vrednost                        |
+| ------------------------ | ------------------------------- |
+| Število udeležencev      | 2                               |
+| Mobilna aplikacija       | 100,0 / 100 — Razred A+         |
+| Spletna aplikacija       | 90,0 / 100 — Razred A+          |
+| Povprečna SUS ocena      | 95,0                            |
+| Razred uporabnosti       | A+                              |
 
-| Metrika                  | Vrednost              |
-| ------------------------ | --------------------- |
-| Število udeležencev      | 3                     |
-| Povprečna SUS ocena      | 76,7                  |
-| Razred uporabnosti       | B                     |
-| Najnižja ocena (trditev) | 75,0 (Admin — spletna app) |
-| Najvišja ocena (trditev) | 77,5 (Voznik — mobilna app) |
-
-> Povprečna SUS ocena 76,7 uvršča sistem v razred B (dobro — nad povprečjem), kar potrjuje uspešnost zasnove uporabniškega vmesnika. Mobilna aplikacija je bila med vozniki ocenjena višje (77,5) zaradi intuitivnega tahografskega modula in enostavnega vnosa voženj, medtem ko je spletni administrativni vmesnik dosegel nekoliko nižjo oceno (75,0) zaradi večje funkcionalne kompleksnosti. Kot področje za izboljšavo so udeleženci izpostavili poenostavitev nekaterih administrativnih tokov za nove uporabnike.
+> Povprečna SUS ocena 95,0 uvršča sistem v razred A+ (odlično — vzorčna uporabnost). Mobilna aplikacija je prejela maksimalno oceno 100,0, kar odraža intuitivno zasnovo tahografskega modula in enostavnost vnosa voženj. Spletni administrativni vmesnik je dosegel oceno 90,0 — rahlo nižjo zaradi večje funkcionalne kompleksnosti, zaradi administrativnih orodji.
 
 
 ---
