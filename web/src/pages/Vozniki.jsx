@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar';
 import api from '../api/client';
+import { useAuth } from '../hooks/useAuth';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -333,7 +334,7 @@ async function generatePDFDoc(selectedDriver, pdfTemplateRef, setPdfLoading, set
 }
 
 // ─── Sub-komponente za main view ──────────────────────────────────────────────
-function VoznikiTabela({ paginatedVozniki, handleOpenDriverReport }) {
+function VoznikiTabela({ paginatedVozniki, handleOpenDriverReport, isAdmin }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[760px] border-collapse">
@@ -363,11 +364,13 @@ function VoznikiTabela({ paginatedVozniki, handleOpenDriverReport }) {
                 </span>
               </td>
               <td className="px-5 py-4 text-right">
-                <button type="button" onClick={() => handleOpenDriverReport(voznik)}
-                  className="inline-flex items-center rounded-md p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                  aria-label={`Odpri poročilo voženj za ${voznik.ime} ${voznik.priimek}`}>
-                  <span className="material-symbols-outlined text-[20px]">edit</span>
-                </button>
+                {isAdmin && (
+                  <button type="button" onClick={() => handleOpenDriverReport(voznik)}
+                    className="inline-flex items-center rounded-md p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
+                    aria-label={`Odpri poročilo voženj za ${voznik.ime} ${voznik.priimek}`}>
+                    <span className="material-symbols-outlined text-[20px]">edit</span>
+                  </button>
+                )}
               </td>
             </tr>
           ))}
@@ -406,7 +409,7 @@ function RideTabela({ paginatedRides, formatDate, formatTime, calculateDur }) {
                   {calculateDur(ride.zacetek, ride.konc)}
                 </span>
               </td>
-              <td className="px-4 py-4 text-slate-700">{ride.stranka || '-'}</td>
+              <td className="px-4 py-4 text-slate-700">{ride.stranka?.naziv ?? ride.stranka_ime ?? '-'}</td>
               <td className="px-4 py-4 text-slate-700">{ride.opis || '-'}</td>
             </tr>
           ))}
@@ -418,6 +421,8 @@ function RideTabela({ paginatedRides, formatDate, formatTime, calculateDur }) {
 
 // ─── Main Page ────────────────────────────────────────────────────────────────
 export default function Vozniki() {
+  const { vloga } = useAuth();
+  const isAdmin = vloga === 2;
   const [vozniki, setVozniki]               = useState([]);
   const [loading, setLoading]               = useState(true);
   const [error, setError]                   = useState(null);
@@ -726,7 +731,7 @@ export default function Vozniki() {
         )}
         {vozniki.length > 0 && (
           <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm mb-6">
-            <VoznikiTabela paginatedVozniki={paginatedVozniki} handleOpenDriverReport={handleOpenDriverReport} />
+            <VoznikiTabela paginatedVozniki={paginatedVozniki} handleOpenDriverReport={handleOpenDriverReport} isAdmin={isAdmin} />
             <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
               <p>Prikazano {startRow}-{endRow} od {vozniki.length} voznikov</p>
               <div className="flex items-center gap-2 self-end sm:self-auto">

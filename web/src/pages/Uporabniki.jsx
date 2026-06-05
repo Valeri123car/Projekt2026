@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Sidebar from '../components/Sidebar';
 import api from '../api/client';
+import { useAuth } from '../hooks/useAuth';
 
 const ITEMS_PER_PAGE = 8;
 
@@ -275,6 +276,8 @@ function DeleteModal({ user, onClose, onDeleted }) {
 
 // ─── Main Page ───────────────────────────────────────────────────────────────
 export default function Uporabniki() {
+  const { vloga } = useAuth();
+  const isAdmin = vloga === 2;
   const [uporabniki, setUporabniki] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -401,14 +404,16 @@ export default function Uporabniki() {
               <span className="material-symbols-outlined text-[18px]">refresh</span>
               {loading ? 'Osvežujem...' : 'Osveži'}
             </button>
-            <button
-              type="button"
-              onClick={() => setModal({ type: 'add' })}
-              className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
-            >
-              <span className="material-symbols-outlined text-[18px]">person_add</span>
-              Nov uporabnik
-            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => setModal({ type: 'add' })}
+                className="inline-flex items-center gap-2 rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+              >
+                <span className="material-symbols-outlined text-[18px]">person_add</span>
+                Nov uporabnik
+              </button>
+            )}
           </div>
         </div>
 
@@ -522,24 +527,26 @@ export default function Uporabniki() {
                         </td>
                         <td className="px-4 py-4 text-slate-500 text-sm">{formatDate(u.gdpr_datum)}</td>
                         <td className="px-5 py-4 text-right">
-                          <div className="inline-flex items-center gap-1">
-                            <button
-                              type="button"
-                              className="inline-flex items-center rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
-                              aria-label={`Uredi ${u.ime} ${u.priimek}`}
-                              onClick={() => setModal({ type: 'edit', user: u })}
-                            >
-                              <span className="material-symbols-outlined text-[18px]">edit</span>
-                            </button>
-                            <button
-                              type="button"
-                              className="inline-flex items-center rounded-md p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
-                              aria-label={`Izbriši ${u.ime} ${u.priimek}`}
-                              onClick={() => setModal({ type: 'delete', user: u })}
-                            >
-                              <span className="material-symbols-outlined text-[18px]">delete</span>
-                            </button>
-                          </div>
+                          {isAdmin && (
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                className="inline-flex items-center rounded-md p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-900"
+                                aria-label={`Uredi ${u.ime} ${u.priimek}`}
+                                onClick={() => setModal({ type: 'edit', user: u })}
+                              >
+                                <span className="material-symbols-outlined text-[18px]">edit</span>
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex items-center rounded-md p-2 text-slate-500 hover:bg-red-50 hover:text-red-600"
+                                aria-label={`Izbriši ${u.ime} ${u.priimek}`}
+                                onClick={() => setModal({ type: 'delete', user: u })}
+                              >
+                                <span className="material-symbols-outlined text-[18px]">delete</span>
+                              </button>
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );

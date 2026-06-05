@@ -35,17 +35,23 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
   const isEdit = mode === 'edit';
 
   const [datum, setDatum]                 = useState(isEdit ? toInputDate(prevoz.datum) : '');
-  const [ura, setUra]                     = useState(isEdit ? toInputTime(prevoz.zacetek) : '08:00');
+  const [uraZacetek, setUraZacetek]       = useState(isEdit ? toInputTime(prevoz.zacetek) : '08:00');
+  const [uraKonec, setUraKonec]           = useState(isEdit ? toInputTime(prevoz.konc) : '16:00');
   const [relacija, setRelacija]           = useState(isEdit ? (prevoz.relacija ?? '') : '');
   const [opis, setOpis]                   = useState(isEdit ? (prevoz.opis ?? '') : '');
   const [cena, setCena]                   = useState(isEdit ? (prevoz.cena ?? '') : '');
   const [placano, setPlacano]             = useState(isEdit ? prevoz.placano : false);
   const [selectedStranka, setSelectedStranka] = useState(isEdit ? String(prevoz.fk_stranka ?? '') : '');
+  const [novaStrankaOpen, setNovaStrankaOpen] = useState(false);
+  const [novaStrankaData, setNovaStrankaData] = useState({ naziv: '', email: '', telefonska: '', davcna_st: '' });
+  const [novaStrankaSaving, setNovaStrankaSaving] = useState(false);
   const [selectedVozilo, setSelectedVozilo]   = useState(isEdit ? String(prevoz.fk_vozilo ?? '') : '');
   const [selectedVoznik, setSelectedVoznik]   = useState(isEdit ? String(prevoz.fk_uporabnik ?? '') : '');
   const [strankeList, setStrankeList]     = useState([]);
   const [vozilaList, setVozilaList]       = useState([]);
   const [voznikiList, setVoznikiList]     = useState([]);
+  const [zasedeniVozniki, setZasedeniVozniki] = useState([]);
+  const [zasedeniVozila, setZasedeniVozila]   = useState([]);
   const [saving, setSaving]               = useState(false);
   const [error, setError]                 = useState(null);
 
@@ -67,14 +73,44 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
     load();
   }, []);
 
+  useEffect(() => {
+    if (!datum) { setZasedeniVozniki([]); setZasedeniVozila([]); return; }
+    const check = async () => {
+      try {
+        const res = await api.get(`/admin/voznje?od=${datum}&do=${datum}`);
+        const prevozi = (res.data || []).filter((p) =>
+          isEdit ? p.id_voznja !== prevoz.id_voznja : true
+        );
+        const [hz, mz] = uraZacetek.split(':');
+        const [hk, mk] = uraKonec.split(':');
+        const zacMs = parseInt(hz) * 60 + parseInt(mz);
+        const koncMs = parseInt(hk) * 60 + parseInt(mk);
+        const newZac = new Date(`${datum}T${uraZacetek}:00`);
+        const newKonc = new Date(`${datum}T${uraKonec}:00`);
+        if (koncMs <= zacMs) newKonc.setDate(newKonc.getDate() + 1);
+
+        const overlaps = (p) => new Date(p.zacetek) < newKonc && new Date(p.konc) > newZac;
+        setZasedeniVozniki(prevozi.filter(overlaps).map((p) => p.fk_uporabnik));
+        setZasedeniVozila(prevozi.filter(overlaps).filter((p) => p.fk_vozilo).map((p) => p.fk_vozilo));
+      } catch { /* ignore */ }
+    };
+    check();
+  }, [datum, uraZacetek, uraKonec]);
+
   const handleSubmit = async () => {
     setError(null);
     if (!datum)           return setError('Datum je obvezen.');
     if (!selectedVoznik)  return setError('Izberite voznika.');
 
-    const [h, m] = ura.split(':');
-    const zacetek = `${datum}T${h.padStart(2, '0')}:${m.padStart(2, '0')}:00`;
-    const konc    = `${datum}T${h.padStart(2, '0')}:${m.padStart(2, '0')}:00`;
+    const [hz, mz] = uraZacetek.split(':');
+    const [hk, mk] = uraKonec.split(':');
+    const zacetek = `${datum}T${hz.padStart(2, '0')}:${mz.padStart(2, '0')}:00`;
+    const zacMs   = parseInt(hz) * 60 + parseInt(mz);
+    const koncMs  = parseInt(hk) * 60 + parseInt(mk);
+    const koncDatum = koncMs <= zacMs
+      ? new Date(new Date(datum).getTime() + 86400000).toISOString().split('T')[0]
+      : datum;
+    const konc = `${koncDatum}T${hk.padStart(2, '0')}:${mk.padStart(2, '0')}:00`;
 
     try {
       setSaving(true);
@@ -105,8 +141,8 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 p-4 overflow-y-auto">
-      <div className="w-full max-w-xl rounded-2xl bg-white shadow-2xl my-8">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 sticky top-0 bg-white rounded-t-2xl z-10">
           <div className="flex items-center gap-3">
             <span className="material-symbols-outlined rounded-lg bg-blue-50 p-2 text-blue-600">
@@ -121,46 +157,97 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
           </button>
         </div>
 
-        <div className="px-6 py-5 space-y-4">
+        <div className="px-6 py-5 space-y-4 overflow-y-auto flex-1">
           {error && <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-3 gap-3">
             <div>
               <label className="mb-1 block text-xs font-medium text-slate-600">Datum *</label>
               <input type="date" value={datum} onChange={(e) => setDatum(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
             <div>
-              <label className="mb-1 block text-xs font-medium text-slate-600">Ura odhoda</label>
-              <input type="time" value={ura} onChange={(e) => setUra(e.target.value)}
+              <label className="mb-1 block text-xs font-medium text-slate-600">Začetek</label>
+              <input type="time" value={uraZacetek} onChange={(e) => setUraZacetek(e.target.value)}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Konec</label>
+              <input type="time" value={uraKonec} onChange={(e) => setUraKonec(e.target.value)}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Voznik *</label>
-            <select value={selectedVoznik} onChange={(e) => setSelectedVoznik(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">— Izberite voznika —</option>
-              {voznikiList.map((v) => (
-                <option key={v.id_uporabnik} value={String(v.id_uporabnik)}>{v.ime} {v.priimek}</option>
-              ))}
-            </select>
+            <div className="grid grid-cols-2 gap-1.5 max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2">
+              {voznikiList.map((v) => {
+                const id = String(v.id_uporabnik);
+                const zaseden = zasedeniVozniki.includes(v.id_uporabnik);
+                const selected = selectedVoznik === id;
+                return (
+                  <button key={id} type="button" onClick={() => setSelectedVoznik(id)}
+                    className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                      selected && zaseden ? 'border-orange-400 bg-orange-50 text-orange-900'
+                      : selected          ? 'border-blue-500 bg-blue-50 text-blue-800'
+                      : zaseden           ? 'border-yellow-300 bg-yellow-50 hover:border-yellow-400'
+                                          : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40'
+                    }`}>
+                    <span className="font-medium">{v.ime} {v.priimek}</span>
+                    {zaseden && (
+                      <span className={`ml-2 inline-flex items-center gap-0.5 text-[10px] font-bold ${selected ? 'text-orange-500' : 'text-yellow-600'}`}>
+                        <span className="material-symbols-outlined text-[12px]">warning</span>
+                        ZASEDEN
+                      </span>
+                    )}
+                    {!zaseden && selected && <span className="material-symbols-outlined text-[16px] text-blue-600">check_circle</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Vozilo</label>
-            <select value={selectedVozilo} onChange={(e) => setSelectedVozilo(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">— Izberite vozilo —</option>
-              {vozilaList.map((v) => (
-                <option key={v.id_vozilo} value={String(v.id_vozilo)}>{v.registerska} · {v.tip_vozila?.naziv ?? '—'}</option>
-              ))}
-            </select>
+            <div className="grid grid-cols-2 gap-1.5 max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2">
+              {vozilaList.map((v) => {
+                const id = String(v.id_vozilo);
+                const zaseden = zasedeniVozila.includes(v.id_vozilo);
+                const selected = selectedVozilo === id;
+                return (
+                  <button key={id} type="button" onClick={() => setSelectedVozilo(selected ? '' : id)}
+                    className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors ${
+                      selected && zaseden ? 'border-orange-400 bg-orange-50 text-orange-900'
+                      : selected          ? 'border-blue-500 bg-blue-50 text-blue-800'
+                      : zaseden           ? 'border-yellow-300 bg-yellow-50 hover:border-yellow-400'
+                                          : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40'
+                    }`}>
+                    <div>
+                      <p className="font-medium">{v.registerska}</p>
+                      {v.tip_vozila?.naziv && <p className="text-[11px] text-slate-500">{v.tip_vozila.naziv}</p>}
+                    </div>
+                    {zaseden && (
+                      <span className={`ml-2 inline-flex items-center gap-0.5 text-[10px] font-bold ${selected ? 'text-orange-500' : 'text-yellow-600'}`}>
+                        <span className="material-symbols-outlined text-[12px]">warning</span>
+                        ZASEDEN
+                      </span>
+                    )}
+                    {!zaseden && selected && <span className="material-symbols-outlined text-[16px] text-blue-600">check_circle</span>}
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Stranka</label>
+            <div className="mb-1 flex items-center justify-between">
+              <label className="text-xs font-medium text-slate-600">Stranka</label>
+              <button type="button" onClick={() => setNovaStrankaOpen((o) => !o)}
+                className="inline-flex items-center gap-1 rounded-md px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-50">
+                <span className="material-symbols-outlined text-[14px]">{novaStrankaOpen ? 'close' : 'add'}</span>
+                {novaStrankaOpen ? 'Prekliči' : 'Nova stranka'}
+              </button>
+            </div>
             <select value={selectedStranka} onChange={(e) => setSelectedStranka(e.target.value)}
               className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500">
               <option value="">— Izberite stranko —</option>
@@ -168,6 +255,54 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
                 <option key={s.id_stranka} value={String(s.id_stranka)}>{s.naziv}{s.telefonska ? ` · ${s.telefonska}` : ''}</option>
               ))}
             </select>
+
+            {novaStrankaOpen && (
+              <div className="mt-2 rounded-lg border border-blue-200 bg-blue-50 p-3 space-y-2">
+                <p className="text-xs font-semibold text-blue-700">Nova stranka</p>
+                <input value={novaStrankaData.naziv}
+                  onChange={(e) => setNovaStrankaData((d) => ({ ...d, naziv: e.target.value }))}
+                  placeholder="Naziv *"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <div className="grid grid-cols-2 gap-2">
+                  <input value={novaStrankaData.telefonska}
+                    onChange={(e) => setNovaStrankaData((d) => ({ ...d, telefonska: e.target.value }))}
+                    placeholder="Telefonska"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                  <input value={novaStrankaData.email}
+                    onChange={(e) => setNovaStrankaData((d) => ({ ...d, email: e.target.value }))}
+                    placeholder="E-pošta"
+                    className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                </div>
+                <input value={novaStrankaData.davcna_st}
+                  onChange={(e) => setNovaStrankaData((d) => ({ ...d, davcna_st: e.target.value }))}
+                  placeholder="Davčna številka"
+                  type="number"
+                  className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                <button type="button" disabled={novaStrankaSaving || !novaStrankaData.naziv.trim()}
+                  onClick={async () => {
+                    setNovaStrankaSaving(true);
+                    try {
+                      const res = await api.post('/admin/stranke', {
+                        naziv: novaStrankaData.naziv.trim(),
+                        email: novaStrankaData.email || undefined,
+                        telefonska: novaStrankaData.telefonska || undefined,
+                        davcna_st: novaStrankaData.davcna_st ? parseInt(novaStrankaData.davcna_st) : undefined,
+                      });
+                      setStrankeList((prev) => [...prev, res.data].sort((a, b) => a.naziv.localeCompare(b.naziv)));
+                      setSelectedStranka(String(res.data.id_stranka));
+                      setNovaStrankaOpen(false);
+                      setNovaStrankaData({ naziv: '', email: '', telefonska: '', davcna_st: '' });
+                    } catch {
+                      setError('Napaka pri ustvarjanju stranke.');
+                    } finally {
+                      setNovaStrankaSaving(false);
+                    }
+                  }}
+                  className="w-full rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-60">
+                  {novaStrankaSaving ? 'Shranjujem...' : 'Ustvari stranko'}
+                </button>
+              </div>
+            )}
           </div>
 
           <div>
@@ -179,9 +314,10 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
 
           <div>
             <label className="mb-1 block text-xs font-medium text-slate-600">Opis</label>
-            <input value={opis} onChange={(e) => setOpis(e.target.value)}
+            <textarea value={opis} onChange={(e) => setOpis(e.target.value)}
               placeholder="Dodatne opombe..."
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+              rows={3}
+              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none" />
           </div>
 
           <div className="grid grid-cols-2 gap-3 items-end">
