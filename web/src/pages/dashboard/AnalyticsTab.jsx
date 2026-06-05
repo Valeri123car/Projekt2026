@@ -523,7 +523,7 @@ export default function AnalyticsTab() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h3 className="text-sm font-bold text-gray-800 mb-1">Prihodki – zadnjih 6 mesecev</h3>
-          <div className="h-64">
+          <div className="h-80">
             {monthlyRevenueTrend.length > 0
               ? <VBarChart data={monthlyRevenueTrend} color="#059669" color2="#059669" labelKey="label" valueKey="value" value2Key="value2" />
               : <p className="text-xs text-gray-400 text-center pt-8">Ni podatkov o prihodkih.</p>}

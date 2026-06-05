@@ -48,27 +48,34 @@ export function VBarChart({ data, color = '#2563eb', color2, labelKey = 'label',
 
   const maxV    = Math.max(1, ...data.map((d) => d[valueKey] + (value2Key ? (d[value2Key] ?? 0) : 0)));
   const W       = 1000;
-  const H       = 260;
-  const PAD_L   = 10;
-  const PAD_B   = 40;
-  const PAD_T   = 20;
+  const H       = 280;
+  const PAD_L   = 70;
+  const PAD_B   = 44;
+  const PAD_T   = 24;
+  const gW      = W - PAD_L - 10;
   const gH      = H - PAD_B - PAD_T;
-  const bW      = Math.min(55, (W - PAD_L) / data.length - 6);
-  const spacing = (W - PAD_L) / data.length;
+  const bW      = Math.min(70, gW / data.length - 8);
+  const spacing = gW / data.length;
+
+  const fmtLabel = (v) => {
+    if (v >= 1000) return `${Math.round(v / 100) / 10}k`;
+    return `${Math.round(v * 10) / 10}`;
+  };
 
   return (
     <svg viewBox={`0 0 ${W} ${H}`} className="w-full h-full" preserveAspectRatio="xMidYMid meet">
       <rect width={W} height={H} fill="white" />
       {[0, 0.25, 0.5, 0.75, 1].map((f) => {
         const y = PAD_T + gH - f * gH;
-        const v = Math.round(maxV * f * 10) / 10;
+        const v = maxV * f;
         return (
           <g key={f}>
-            <line x1={PAD_L} y1={y} x2={W} y2={y} stroke="#f3f4f6" strokeWidth="1" />
-            <text x={PAD_L + 2} y={y - 3} fontSize="10" fill="#d1d5db">{v}</text>
+            <line x1={PAD_L} y1={y} x2={W - 10} y2={y} stroke="#f3f4f6" strokeWidth="1" />
+            <text x={PAD_L - 6} y={y + 5} fontSize="13" fill="#6b7280" textAnchor="end">{fmtLabel(v)}</text>
           </g>
         );
       })}
+      <line x1={PAD_L} y1={PAD_T} x2={PAD_L} y2={PAD_T + gH} stroke="#e5e7eb" strokeWidth="1" />
       {data.map((d, i) => {
         const x  = PAD_L + i * spacing + (spacing - bW) / 2;
         const h1 = (d[valueKey] / maxV) * gH;
@@ -82,11 +89,11 @@ export function VBarChart({ data, color = '#2563eb', color2, labelKey = 'label',
             )}
             {h1 > 0 && <rect x={x} y={y1} width={bW} height={h1} fill={color} rx="3" />}
             {(h1 + h2) > 0 && (
-              <text x={x + bW / 2} y={y1 - h2 - 3} fontSize="10" fill="#374151" textAnchor="middle" fontWeight="bold">
-                {Math.round(total * 10) / 10}
+              <text x={x + bW / 2} y={y1 - h2 - 5} fontSize="13" fill="#374151" textAnchor="middle" fontWeight="bold">
+                {fmtLabel(total)}
               </text>
             )}
-            <text x={x + bW / 2} y={H - PAD_B + 14} fontSize="10" fill="#6b7280" textAnchor="middle">
+            <text x={x + bW / 2} y={H - PAD_B + 16} fontSize="13" fill="#6b7280" textAnchor="middle">
               {d[labelKey]}
             </text>
           </g>
