@@ -334,7 +334,7 @@ async function generatePDFDoc(selectedDriver, pdfTemplateRef, setPdfLoading, set
 }
 
 // ─── Sub-komponente za main view ──────────────────────────────────────────────
-function VoznikiTabela({ paginatedVozniki, handleOpenDriverReport, isAdmin }) {
+function VoznikiTabela({ paginatedVozniki, handleOpenDriverReport }) {
   return (
     <div className="overflow-x-auto">
       <table className="w-full min-w-[760px] border-collapse">
@@ -344,12 +344,18 @@ function VoznikiTabela({ paginatedVozniki, handleOpenDriverReport, isAdmin }) {
             <th className="px-4 py-4">ID št.</th>
             <th className="px-4 py-4">E-pošta</th>
             <th className="px-4 py-4">Status</th>
-            <th className="px-5 py-4 text-right">Akcije</th>
+            <th className="px-5 py-4 text-right">
+              <span className="material-symbols-outlined text-[16px]">summarize</span>
+            </th>
           </tr>
         </thead>
         <tbody>
           {paginatedVozniki.map((voznik) => (
-            <tr key={voznik.id_uporabnik} className="border-t border-slate-200 hover:bg-slate-50/80">
+            <tr
+              key={voznik.id_uporabnik}
+              className="border-t border-slate-200 hover:bg-blue-50/40 cursor-pointer"
+              onClick={() => handleOpenDriverReport(voznik)}
+            >
               <td className="px-5 py-4">
                 <div className="flex items-center gap-3">
                   <span className="material-symbols-outlined rounded-lg bg-blue-50 p-2 text-blue-600">person</span>
@@ -364,13 +370,7 @@ function VoznikiTabela({ paginatedVozniki, handleOpenDriverReport, isAdmin }) {
                 </span>
               </td>
               <td className="px-5 py-4 text-right">
-                {isAdmin && (
-                  <button type="button" onClick={() => handleOpenDriverReport(voznik)}
-                    className="inline-flex items-center rounded-md p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900"
-                    aria-label={`Odpri poročilo voženj za ${voznik.ime} ${voznik.priimek}`}>
-                    <span className="material-symbols-outlined text-[20px]">edit</span>
-                  </button>
-                )}
+                <span className="material-symbols-outlined text-[20px] text-slate-400">chevron_right</span>
               </td>
             </tr>
           ))}
@@ -489,12 +489,22 @@ export default function Vozniki() {
   };
 
   const handleOpenDriverReport = async (driver) => {
-    setSelectedDriver(driver);
-    setDateFrom('');
-    setDateTo('');
-    setRides([]);
-    setRidesError(null);
-    await fetchVoznjeForDriver(driver.id_uporabnik);
+    try {
+      const res = await api.get(`/admin/voznje?fk_uporabnik=${driver.id_uporabnik}`);
+      const data = res.data || [];
+      if (data.length === 0) {
+        setError(`Voznik ${driver.ime} ${driver.priimek} nima zabeleženih voženj.`);
+        return;
+      }
+      setSelectedDriver(driver);
+      setDateFrom('');
+      setDateTo('');
+      setRides(data);
+      setRidesPage(1);
+      setRidesError(null);
+    } catch {
+      setError('Napaka pri nalaganju voženj.');
+    }
   };
 
   const handleFilterDates = async () => {
@@ -546,11 +556,14 @@ export default function Vozniki() {
         <Sidebar />
         <main className="ml-72 flex-1 p-4 sm:p-6 lg:p-8 bg-slate-50 min-h-screen">
           <div className="mb-6">
-            <div className="mb-4 flex items-center gap-2 text-sm text-slate-500">
-              <button type="button" className="hover:text-slate-700" onClick={() => setSelectedDriver(null)}>Vozniki</button>
-              <span className="material-symbols-outlined text-[16px]">chevron_right</span>
-              <span className="font-medium text-slate-700">Poročilo o vožnjah</span>
-            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedDriver(null)}
+              className="mb-4 inline-flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 py-1.5 text-sm font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <span className="material-symbols-outlined text-[18px]">arrow_back</span>
+              Nazaj na voznike
+            </button>
             <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div>
                 <h1 className="text-3xl font-bold text-slate-900">Poročilo o vožnjah</h1>
@@ -608,7 +621,11 @@ export default function Vozniki() {
               <div className="px-5 py-10 text-center text-slate-500">Nalaganje voženj...</div>
             )}
             {!ridesLoading && rides.length === 0 && (
-              <div className="px-5 py-10 text-center text-slate-500">Ni voženj za izbrano obdobje</div>
+              <div className="px-5 py-12 text-center">
+                <span className="material-symbols-outlined text-4xl text-slate-300">directions_car_off</span>
+                <p className="mt-2 text-sm font-medium text-slate-500">Ta voznik nima zabeleženih voženj</p>
+                <p className="text-xs text-slate-400">za izbrano obdobje</p>
+              </div>
             )}
             {!ridesLoading && rides.length > 0 && (
               <>
@@ -628,7 +645,7 @@ export default function Vozniki() {
             )}
           </section>
 
-          <div className="fixed -left-[99999px] top-0 z-[-1]">
+          {rides.length > 0 && <div className="fixed -left-[99999px] top-0 z-[-1]">
             <section ref={pdfTemplateRef} className="w-[1120px] bg-white px-[64px] py-[58px] text-[#0f172a]" style={{ fontFamily: 'ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif' }}>
               <header className="mb-10 flex items-start justify-between">
                 <div className="flex items-center gap-4">
@@ -673,7 +690,7 @@ export default function Vozniki() {
                       <tr key={`pdf-${ride.id_voznja}`} className="border-t border-slate-300 align-top text-[24px] text-slate-800">
                         <td className="px-6 py-4">{formatDateCompact(ride.datum || ride.zacetek)}</td>
                         <td className="px-6 py-4 font-medium">{calculateDuration(ride.zacetek, ride.konc)}</td>
-                        <td className="px-6 py-4 font-medium">{ride.stranka || '-'}</td>
+                        <td className="px-6 py-4 font-medium">{ride.stranka?.naziv ?? ride.stranka_ime ?? '-'}</td>
                         <td className="px-6 py-4 text-slate-700">{ride.opis || '-'}</td>
                       </tr>
                     ))}
@@ -689,7 +706,7 @@ export default function Vozniki() {
                 <p className="mt-6 text-center text-[20px] text-slate-500">Stran 1 / 1</p>
               </footer>
             </section>
-          </div>
+          </div>}
         </main>
       </div>
     );
@@ -731,7 +748,7 @@ export default function Vozniki() {
         )}
         {vozniki.length > 0 && (
           <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm mb-6">
-            <VoznikiTabela paginatedVozniki={paginatedVozniki} handleOpenDriverReport={handleOpenDriverReport} isAdmin={isAdmin} />
+            <VoznikiTabela paginatedVozniki={paginatedVozniki} handleOpenDriverReport={handleOpenDriverReport} />
             <div className="flex flex-col gap-3 border-t border-slate-200 bg-slate-50 px-5 py-3 text-sm text-slate-600 sm:flex-row sm:items-center sm:justify-between">
               <p>Prikazano {startRow}-{endRow} od {vozniki.length} voznikov</p>
               <div className="flex items-center gap-2 self-end sm:self-auto">
