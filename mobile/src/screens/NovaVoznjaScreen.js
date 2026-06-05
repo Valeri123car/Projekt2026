@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,17 +8,59 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
+  Modal,
+  FlatList,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import DateTimePicker from "@react-native-community/datetimepicker";
 import api from "../api/client";
 import { useGoogleCalendar } from "../hooks/useGoogleCalendar";
 
+function DropdownModal({ visible, title, items, labelKey, onSelect, onClose }) {
+  return (
+    <Modal
+      visible={visible}
+      transparent
+      animationType="slide"
+      onRequestClose={onClose}
+    >
+      <View style={s.modalOverlay}>
+        <View style={s.modalKartica}>
+          <View style={s.modalHeader}>
+            <Text style={s.modalNaslov}>{title}</Text>
+            <TouchableOpacity onPress={onClose}>
+              <MaterialCommunityIcons name="close" size={22} color="#424754" />
+            </TouchableOpacity>
+          </View>
+          <FlatList
+            data={items}
+            keyExtractor={(item, i) => String(item.id ?? i)}
+            renderItem={({ item }) => (
+              <TouchableOpacity
+                style={s.modalItem}
+                onPress={() => {
+                  onSelect(item);
+                  onClose();
+                }}
+              >
+                <Text style={s.modalItemTxt}>{item[labelKey]}</Text>
+              </TouchableOpacity>
+            )}
+            ListEmptyComponent={<Text style={s.modalPrazno}>Ni možnosti</Text>}
+          />
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
 export default function NovaVoznjaScreen({ navigation }) {
   const [datum, setDatum] = useState(new Date());
   const [zacetek, setZacetek] = useState(new Date());
   const [konec, setKonec] = useState(new Date());
-  const [stranka, setStranka] = useState("");
+  const [selectedStranka, setSelectedStranka] = useState(null);
+  const [strankeList, setStrankeList] = useState([]);
+  const [strankaModal, setStrankaModal] = useState(false);
   const [postaje, setPostaje] = useState(["", ""]);
   const [opis, setOpis] = useState("");
   const [placano, setPlacano] = useState(false);
@@ -26,6 +68,18 @@ export default function NovaVoznjaScreen({ navigation }) {
   const [aktivniPicker, setAktivniPicker] = useState(null);
 
   const { dodajVoznjovVKolendar, jePovedzan } = useGoogleCalendar();
+
+  useEffect(() => {
+    const naloziStranke = async () => {
+      try {
+        const res = await api.get("/stranke");
+        setStrankeList(res.data || []);
+      } catch {
+        setStrankeList([]);
+      }
+    };
+    naloziStranke();
+  }, []);
 
   const dodajPostajo = () => {
     if (postaje.length < 6) setPostaje([...postaje, ""]);
@@ -67,7 +121,8 @@ export default function NovaVoznjaScreen({ navigation }) {
         datum: datum.toISOString().split("T")[0],
         zacetek: zacDatum.toISOString(),
         konc: konDatum.toISOString(),
-        stranka: stranka || null,
+        stranka_ime: selectedStranka?.naziv || null,
+        fk_stranka: selectedStranka?.id_stranka || null,
         relacija: relacija || null,
         opis: opis || null,
         placano,
@@ -257,21 +312,39 @@ export default function NovaVoznjaScreen({ navigation }) {
         <Text style={s.sekcijaNaslov}>PODROBNOSTI</Text>
 
         <Text style={s.label}>Stranka</Text>
-        <View style={s.inputWrap}>
+        <TouchableOpacity
+          style={s.dropdownBtn}
+          onPress={() => setStrankaModal(true)}
+        >
+          <MaterialCommunityIcons name="domain" size={18} color="#727785" />
+          <Text
+            style={[s.dropdownTxt, !selectedStranka && s.dropdownPlaceholder]}
+          >
+            {selectedStranka ? selectedStranka.naziv : "Izberi stranko..."}
+          </Text>
           <MaterialCommunityIcons
-            name="domain"
+            name="chevron-down"
             size={18}
-            color="#727785"
-            style={s.inputIkona}
+            color="#c2c6d6"
           />
-          <TextInput
-            style={s.input}
-            value={stranka}
-            onChangeText={setStranka}
-            placeholder="npr. Mercator d.d."
-            placeholderTextColor="#c2c6d6"
-          />
-        </View>
+        </TouchableOpacity>
+        {selectedStranka && (
+          <TouchableOpacity
+            onPress={() => setSelectedStranka(null)}
+            style={s.pocistiBtn}
+          >
+            <Text style={s.pocistiTxt}>Počisti stranko</Text>
+          </TouchableOpacity>
+        )}
+
+        <DropdownModal
+          visible={strankaModal}
+          title="Izberi stranko"
+          items={strankeList.map((s) => ({ ...s, id: s.id_stranka }))}
+          labelKey="naziv"
+          onSelect={setSelectedStranka}
+          onClose={() => setStrankaModal(false)}
+        />
 
         <Text style={s.label}>Relacija</Text>
         <Text style={s.labelOpis}>
@@ -492,6 +565,21 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   infoTxt: { fontSize: 11, color: "#727785", flex: 1 },
+  dropdownBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    borderWidth: 1,
+    borderColor: "#c2c6d6",
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 6,
+    backgroundColor: "#f9f9ff",
+  },
+  dropdownTxt: { flex: 1, fontSize: 14, color: "#191b23", fontWeight: "500" },
+  dropdownPlaceholder: { color: "#c2c6d6" },
+  pocistiBtn: { marginBottom: 14 },
+  pocistiTxt: { fontSize: 11, color: "#ba1a1a", fontWeight: "600" },
   inputWrap: {
     flexDirection: "row",
     alignItems: "center",
@@ -502,7 +590,6 @@ const s = StyleSheet.create({
     backgroundColor: "#f9f9ff",
   },
   inputWrapMulti: { alignItems: "flex-start", paddingTop: 4 },
-  inputIkona: { paddingLeft: 12 },
   input: { flex: 1, padding: 12, fontSize: 14, color: "#191b23" },
   inputMulti: { minHeight: 80, textAlignVertical: "top" },
   postajaVrstica: { flexDirection: "row", marginBottom: 8 },
@@ -604,4 +691,32 @@ const s = StyleSheet.create({
     marginTop: 4,
   },
   shraniBtnTxt: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
+  },
+  modalKartica: {
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    maxHeight: "70%",
+    paddingBottom: 32,
+  },
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e1e2ec",
+  },
+  modalNaslov: { fontSize: 16, fontWeight: "700", color: "#191b23" },
+  modalItem: {
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f2f3fd",
+  },
+  modalItemTxt: { fontSize: 15, color: "#191b23" },
+  modalPrazno: { padding: 20, textAlign: "center", color: "#727785" },
 });
