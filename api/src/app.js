@@ -35,7 +35,7 @@ await app.register(multipart, {
 });
 
 await app.register(jwt, {
-  secret: process.env.JWT_SECRET || "dev_secret_zamenjaj",
+  secret: process.env.JWT_SECRET,
 });
 
 await app.register(swagger, {
