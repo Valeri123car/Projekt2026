@@ -30,6 +30,7 @@
 15. [Zagotavljanje kakovosti](#15-zagotavljanje-kakovosti)
 16. [Znane omejitve](#16-znane-omejitve)
 17. [Testiranje uporabniške izkušnje (SUS)](#17-testiranje-uporabni%C5%A1ke-izku%C5%A1nje-sus)
+18. [Možne nadgradnje v prihodnosti](#18-mo%C5%BEne-nadgradnje-v-prihodnosti)
 
 ---
 
@@ -43,24 +44,23 @@ Logistična podjetja, ki upravljajo vozne parke in zaposlujejo voznike, se sooč
 
 - Sledenje tahografskim stanjem v realnem času prek mobilne aplikacije (VOZNJA, ODMOR, POCITEK, DELO, RAZPOLOZLJIVOST, DRUGO)
 - **Offline delovanje mobilne aplikacije** — tahografska stanja se shranjujejo lokalno ob izpadu povezave in se avtomatsko sinhronizirajo ob ponovni vzpostavitvi
-- Uvoz binarnih EU Digital Tachograph datotek (DDD format) in Excel datotek prek spletnega vmesnika
+- Uvoz Excel datotek prek spletnega vmesnika
 - Upravljanje vožnje: beleženje, pregledovanje in brisanje posameznih voženj
-- Razpored voznikov: urniki, dodeljevanje vozil in strank
+- Načrtovanje prevozov: dodeljevanje voznikov, vozil in strank
 - Vozni park: evidenca vozil in tipov vozil
 - Upravljanje strank (naročnikov)
-- Obračun plač: generiranje računov na podlagi urnih postavk
 - Administrativni dashboard z agregiranim pregledom nad vsemi vozniki
 - Audit log vseh sprememb podatkov (POST/PUT/DELETE/PATCH)
-- GDPR skladnost: anonimizacija osebnih podatkov na zahtevo
+- GDPR skladnost: anonimizacija osebnih podatkov prek API klica (`DELETE /auth/me`) — UI gumb ni implementiran
 - Google Calendar integracija za urnik v mobilni aplikaciji
 
 ### Uporabniški profili
 
-| Vloga       | Koda | Opis                                                                                                      |
-| ----------- | ---- | --------------------------------------------------------------------------------------------------------- |
-| Voznik      | 1    | Beleži vožnje in tahografska stanja prek mobilne aplikacije; pregleduje lastne urnike in račune           |
-| Admin       | 2    | Upravlja vozni park, stranke, voznike in urnike; dostopa do dashboard-a, audit logov in uvoza DDD datotek |
-| Računovodja | 3    | Pregleduje vse račune in finančne podatke; nima dostopa do admin funkcij upravljanja                      |
+| Vloga   | Koda | Opis                                                                                                        |
+| ------- | ---- | ----------------------------------------------------------------------------------------------------------- |
+| Voznik  | 1    | Beleži vožnje in tahografska stanja prek mobilne aplikacije; pregleduje lastne vožnje                       |
+| Admin   | 2    | Upravlja vozni park, stranke, voznike in prevozi; dostopa do dashboard-a, audit logov in uvoza excel datotek  |
+| Vodstvo | 3    | Pregleduje vse prevozi in finančne podatke; dostopa do dashboard-a in analitike; uvoz in izvoz excel datotek                             |
 
 ---
 
@@ -69,8 +69,8 @@ Logistična podjetja, ki upravljajo vozne parke in zaposlujejo voznike, se sooč
 | Član            | GitHub                                           | Vloga                                                |
 | --------------- | ------------------------------------------------ | ---------------------------------------------------- |
 | Valeri Kamburov | [@Valeri123car](https://github.com/Valeri123car) | Vodja projekta, full-stack razvoj (API, Web, Mobile) |
-| Luka Crešnar    | [@LukaCresnar](https://github.com/LukaCresnar)   | Web razvoj, baza podatkov, testiranje                |
-| Rok Krajnc      | [@kranjo4](https://github.com/kranjo4)           | Web razvoj, baza podatkov, testiranje                |
+| Luka Crešnar    | [@LukaCresnar](https://github.com/LukaCresnar)   | Web razvoj, baza podatkov, API, testiranje                |
+| Rok Krajnc      | [@kranjo4](https://github.com/kranjo4)           | Web razvoj, baza podatkov, API, testiranje                |
 
 **Skrbnik projekta:** Sirena d.o.o.
 
@@ -78,7 +78,7 @@ Logistična podjetja, ki upravljajo vozne parke in zaposlujejo voznike, se sooč
 
 ## 3. Arhitektura
 
-Sistem sledi klasični **3-tier arhitekturi**: mobilni in spletni odjemalec komunicirata z Fastify REST API-jem, ki upravlja bazo podatkov PostgreSQL prek Prisma ORM-a. Python skripte se izvajajo kot subprocesi za obdelavo binarnih tahografskih datotek.
+Sistem sledi klasični **3-tier arhitekturi**: mobilni in spletni odjemalec komunicirata z Fastify REST API-jem, ki upravlja bazo podatkov PostgreSQL prek Prisma ORM-a. Python skripte se izvajajo kot subprocesi za obdelavo tahografskih datotek.
 
 ### Arhitekturni diagram
 
@@ -93,7 +93,7 @@ graph TB
         GW["Fastify 5.8.5\nJWT Auth + RBAC + Rate Limiting"]
         PL["Plugins\naudit.js / crypto.js / prisma.js"]
         RT["Routes\n12 modulov"]
-        PY["Python Subprocess\nreadDDDfile.py\nreadExcelFile.py"]
+        PY["Python Subprocess\nreadExcelFile.py"]
     end
 
     subgraph Infrastruktura
@@ -340,21 +340,17 @@ flowchart TD
     S --> R
 ```
 
-### c) DDD datoteka import flow
+### c) Tahografska datoteka import flow
 
-Uvoz binarnih tahografskih datotek je večstopenjski proces. Fastify sprejme datoteko prek multipart forme, jo posreduje Python subprocesu, ki dekodira binarni EU Digital Tachograph format. Rezultat (JSON) se transakcijsko uvozi v bazo.
+Uvoz tahografskih datotek je večstopenjski proces. Fastify sprejme datoteko prek multipart forme, jo posreduje Python subprocesu. Rezultat (JSON) se transakcijsko uvozi v bazo.
 
 ```mermaid
 flowchart TD
-    A[Admin naloži DDD ali Excel datoteko\nspletni vmesnik] --> B[POST /api/v1/ddd_upload/upload\nmultipart/form-data, max 50MB]
+    A[Admin naloži Excel datoteko\nspletni vmesnik] --> B[POST /api/v1/ddd_upload/upload\nmultipart/form-data, max 50MB]
     B --> C[JWT verifikacija\nRBAC: samo admin]
-    C --> D{Tip datoteke?}
-    D -->|.ddd| E[Node.js: spawn Python\nreadDDDfile.py filepath]
-    D -->|.xlsx| F[Node.js: spawn Python\nreadExcelFile.py filepath]
-    E --> G[Python razčleni binarni\nEU Digital Tachograph format]
+    C --> F[Node.js: spawn Python\nreadExcelFile.py filepath]
     F --> H[Python razčleni Excel\ntahografske podatke]
-    G --> I[Python stdout: JSON array\ntahografskih zapisov]
-    H --> I
+    H --> I[Python stdout: JSON array\ntahografskih zapisov]
     I --> J[Node.js: JSON.parse stdout]
     J --> K{JSON validen?}
     K -->|Ne| L[HTTP 500: Python parsing error]
@@ -371,7 +367,7 @@ Admin dashboard agregira podatke iz več tabel hkrati. API vrne pregled aktivnih
 ```mermaid
 flowchart TD
     A[Admin odpre dashboard\nspletna aplikacija] --> B[GET /api/v1/dashboard]
-    B --> C[JWT verifikacija\nRBAC: samo admin]
+    B --> C[JWT verifikacija\nRBAC: admin + vodstvo]
     C --> D[Prisma: paralelne poizvedbe]
     D --> D1[Štetje voznikov\npo statusu]
     D --> D2[Zadnje tahografske\nlokacije voznikov]
@@ -395,7 +391,7 @@ Use case diagram prikazuje vse akterje sistema (Voznik, Admin, Računovodja, Sis
 graph LR
     VOZNIK((Voznik))
     ADMIN((Admin))
-    RACUN((Računovodja))
+    VODSTVO((Vodstvo))
     SIS((Sistem))
 
     subgraph Avtentikacija
@@ -409,7 +405,7 @@ graph LR
         UC5[Ogled lastnih voženj]
         UC6[Dodajanje vožnje]
         UC7[Brisanje vožnje]
-        UC8[Ogled mesečnih voženj vseh voznikov]
+        UC8[Ogled voženj vseh voznikov]
     end
 
     subgraph Tahograf
@@ -423,9 +419,9 @@ graph LR
         UC32[Avtomatska sinhronizacija]
     end
 
-    subgraph Urnik
-        UC15[Ogled urnika]
-        UC16[Upravljanje urnika]
+    subgraph Prevozi
+        UC15[Ogled urnika voženj]
+        UC16[Upravljanje prevozov]
         UC17[Google Calendar sinhronizacija]
     end
 
@@ -437,12 +433,6 @@ graph LR
         UC22[Upravljanje strank]
         UC23[Ogled audit logov]
         UC24[Ogled dashboard-a]
-    end
-
-    subgraph Financ[Finance]
-        UC25[Ogled lastnih računov]
-        UC26[Ogled vseh računov]
-        UC27[Upravljanje urnih postavk]
     end
 
     subgraph Sistem_UC[Sistemski procesi]
@@ -463,7 +453,6 @@ graph LR
     VOZNIK --> UC13
     VOZNIK --> UC15
     VOZNIK --> UC17
-    VOZNIK --> UC25
     VOZNIK --> UC31
     VOZNIK --> UC32
 
@@ -479,11 +468,10 @@ graph LR
     ADMIN --> UC22
     ADMIN --> UC23
     ADMIN --> UC24
-    ADMIN --> UC26
-    ADMIN --> UC27
 
-    RACUN --> UC1
-    RACUN --> UC26
+    VODSTVO --> UC1
+    VODSTVO --> UC8
+    VODSTVO --> UC24
 
     SIS --> UC28
     SIS --> UC29
@@ -576,9 +564,9 @@ sequenceDiagram
     MOB->>API: naloziPodatke() — osveži vse
 ```
 
-### c) Uvoz DDD datoteke (web → API → Python → DB)
+### c) Uvoz Excel datoteke (web → API → Python → DB)
 
-Uvoz DDD datoteke je edini primer integracije med Node.js in Python. Fastify zažene Python skript kot subprocess, bere stdout za JSON rezultat in ga transakcijsko uvozi. Ta pristop je bil izbran, ker Python ekosistem ponuja boljše knjižnice za razčlenjevanje binarnih tahografskih formatov kot Node.js.
+Uvoz Excel datoteke je edini primer integracije med Node.js in Python. Fastify zažene Python skript kot subprocess, bere stdout za JSON rezultat in ga transakcijsko uvozi. Ta pristop je bil izbran, ker Python ekosistem ponuja boljše knjižnice za branje excel formatov kot Node.js.
 
 ```mermaid
 sequenceDiagram
@@ -590,12 +578,8 @@ sequenceDiagram
     WEB->>API: POST /api/v1/ddd_upload/upload\nmultipart/form-data (max 50MB)\n.ddd ali .xlsx datoteka
     API->>API: JWT verifikacija\nRBAC: dostop === 2 (admin)
     API->>API: Shrani datoteko na disk (temp)
-    alt DDD binarni format
-        API->>PY: spawn: python readDDDfile.py <filepath>
-    else Excel format
-        API->>PY: spawn: python readExcelFile.py <filepath>
-    end
-    PY->>PY: Razčleni binarni/Excel format
+    API->>PY: spawn: python readExcelFile.py <filepath>
+    PY->>PY: Razčleni Excel format
     PY-->>API: stdout: JSON array tahografskih zapisov
     API->>API: JSON.parse(stdout)
     alt Parsing error
@@ -635,11 +619,11 @@ Gesla se nikoli ne shranjujejo v čistem tekstu. Ob registraciji se geslo hashir
 
 Vsak endpoint ima definirano zahtevano vlogo. Middleware preveri `dostop` vrednost iz JWT payloada pred izvajanjem handler-ja.
 
-| Vloga       | Koda | Dostopni endpointi                                                                                                                               |
-| ----------- | ---- | ------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Voznik      | 1    | `/auth/*`, `/voznje` (lastne), `/tahograf/*`, `/urnik` (lastni), `/racuni` (lastni)                                                              |
-| Admin       | 2    | Vse rute voznika + `/admin/*`, `/vozila/*`, `/tipi-vozil/*`, `/stranke/*`, `/racuni/vse`, `/urna-postavka/*`, `/dashboard`, `/ddd_upload/upload` |
-| Računovodja | 3    | `/auth/*`, `/racuni/vse`                                                                                                                         |
+| Vloga   | Koda | Dostopni endpointi                                                                                                             |
+| ------- | ---- | ------------------------------------------------------------------------------------------------------------------------------ |
+| Voznik  | 1    | `/auth/*`, `/voznje` (lastne), `/tahograf/*`                                                                                   |
+| Admin   | 2    | Vse rute voznika + `/admin/*`, `/vozila/*`, `/tipi-vozil/*`, `/stranke/*`, `/dashboard/*`, `/ddd_upload/upload`               |
+| Vodstvo | 3    | `/auth/*`, `/admin/voznje`, `/admin/vozniki`, `/admin/stranke`, `/admin/vozila`, `/dashboard/*`                                |
 
 ### Audit log
 
@@ -651,7 +635,9 @@ Globalni rate limit: **100 zahtevkov/minuto** na IP naslov. Login endpoint ima s
 
 ### GDPR
 
-Voznik lahko prek `DELETE /auth/me` zahteva anonimizacijo svojih podatkov. Sistem ne briše zapisov (za namen audit trail-a), ampak anonimizira PII: ime, priimek, email in EMŠO se nadomestijo z anonimnimi vrednostmi. `gdpr_soglasje` in `gdpr_datum` polja beležijo soglasje uporabnika.
+Endpoint `DELETE /auth/me` omogoča anonimizacijo podatkov prijavljenega uporabnika. Sistem ne briše zapisov (za namen audit trail-a), ampak prepiše PII z anonimnimi vrednostmi: `ime` in `priimek` → `"IZBRISANO"`, `email` → `"deleted_{id}_{timestamp}@izbrisano.si"` (unikatno, da ne krši UNIQUE omejitve), `emso_crypted` → `null`, `geslo` → `"IZBRISANO"` (neveljavni bcrypt hash, kar trajno zaklene račun). `gdpr_soglasje` in `gdpr_datum` polja beležijo soglasje pri registraciji.
+
+**Omejitev:** Endpoint obstaja in deluje na ravni API-ja, vendar nobena stran spletne ali mobilne aplikacije trenutno ne ponuja UI gumba za sprožitev tega klica. Klic je mogoč le neposredno prek API-ja (npr. curl ali Swagger).
 
 ### CORS in Swagger
 
@@ -762,19 +748,11 @@ Vsi endpointi so na base poti `/api/v1`. JWT token se pošlje v `Authorization: 
 | ------------------- | ---------- | ------- | --------------- |
 | GET/POST/PUT/DELETE | `/stranke` | Voznik+ | CRUD za stranke |
 
-### Finance
-
-| Metoda              | Pot              | Dostop            | Opis          |
-| ------------------- | ---------------- | ----------------- | ------------- |
-| GET                 | `/racuni`        | Voznik+           | Lastni računi |
-| GET                 | `/racuni/vse`    | Admin/Računovodja | Vsi računi    |
-| GET/POST/PUT/DELETE | `/urna-postavka` | Admin             | Urne postavke |
-
 ### Ostalo
 
-| Metoda | Pot                  | Dostop     | Opis                             |
-| ------ | -------------------- | ---------- | -------------------------------- |
-| GET    | `/dashboard`         | Admin      | Agregirani dashboard podatki     |
+| Metoda | Pot                  | Dostop          | Opis                             |
+| ------ | -------------------- | --------------- | -------------------------------- |
+| GET    | `/dashboard`         | Admin + Vodstvo | Agregirani dashboard podatki     |
 | POST   | `/ddd_upload/upload` | Admin      | Uvoz DDD/Excel tahograf datoteke |
 | GET    | `/docs`              | Basic auth | Swagger UI dokumentacija         |
 | GET    | `/health`            | Javno      | Health check                     |
@@ -828,7 +806,7 @@ CREATE INDEX idx_log_voznja_uporabnik ON "LOG_voznja"(voznja_fk_uporabnik);
 
 PostgreSQL 16 je bil izbran pred alternativami (MySQL, SQLite) zaradi:
 
-- Podpira transakcije ACID, kritične pri `createMany` uvozu DDD podatkov
+- Podpira transakcije ACID, kritične pri `createMany` uvozu tahografskih podatkov
 - `jsonb` tip za morebitno shranjevanje kompleksnih Python parsing rezultatov
 - Prisma ORM ima odlično podporo za PostgreSQL
 - Fly.io ponuja managed PostgreSQL instance
@@ -850,7 +828,7 @@ Ta sekcija dokumentira ključne arhitekturne odločitve (Architecture Decision R
 **Razlog za izbiro monorepa:**
 
 - Atomarni commiti za medsebojno odvisne spremembe
-- Enotno sledenje nalogam in verzionam prek enega repozitorija
+- Enotno sledenje nalogam in verzijam prek enega repozitorija
 - Poenostavljen CI/CD — en GitHub Actions konfiguracija za vse komponente
 
 **Kompromisi:** Večji repozitorij, potencialno daljši `git clone` — za projekt tega obsega ni relevantno.
@@ -878,7 +856,7 @@ Ta sekcija dokumentira ključne arhitekturne odločitve (Architecture Decision R
 
 **Odločitev:** Vsi dostopi do baze gredo prek Prisma ORM-a.
 
-**Kontekst:** Baza ima 7 tabel z medsebojnimi relacijami. Ekipa ima različne stopnje izkušenj z SQL.
+**Kontekst:** Baza ima 7 tabel z medsebojnimi relacijami. 
 
 **Alternative:** Raw SQL (pg driver), Knex.js, Drizzle ORM.
 
@@ -891,13 +869,13 @@ Ta sekcija dokumentira ključne arhitekturne odločitve (Architecture Decision R
 
 ---
 
-### ADR-004: Python subprocess za DDD/Excel parsing
+### ADR-004: Python subprocess za Excel parsing
 
-**Odločitev:** Binarni EU DDD tahografski format in Excel datoteke se razčlenijo prek Python subprocesov, ki jih Node.js zažene sinhrono.
+**Odločitev:** Excel tahografske datoteke se razčlenijo prek Python subprocesov, ki jih Node.js zažene sinhrono.
 
-**Kontekst:** Node.js nima ustreznih knjižnic za EU DDD format; Python ima `tachograph-reader` in `openpyxl`.
+**Kontekst:** Node.js nima ustreznih knjižnic za razčlenjevanje tahografskih Excel formatov; Python ima `openpyxl`.
 
-**Alternative:** Python mikroservis z REST/gRPC vmesnikom; Node.js implementacija binarnega parserja.
+**Alternative:** Python mikroservis z REST/gRPC vmesnikom; Node.js implementacija parserja.
 
 **Razlog za izbiro subprocesov:**
 
@@ -982,7 +960,7 @@ Ta sekcija dokumentira ključne arhitekturne odločitve (Architecture Decision R
 
 ### Organizacija dela
 
-Projekt je bil organiziran po **Kanban metodologiji** z uporabo GitHub Projects orodja za sledenje nalogam.
+Projekt je bil organiziran po **Kanban metodologiji** z uporabo **Trello** orodja za sledenje nalogam. (https://trello.com/b/IctSFTeg/sirena)
 
 **Repozitorij:** [https://github.com/Valeri123car/Projekt2026](https://github.com/Valeri123car/Projekt2026)
 
@@ -990,7 +968,7 @@ Projekt je bil organiziran po **Kanban metodologiji** z uporabo GitHub Projects 
 
 | Področje                                | Odgovorna oseba(e)            |
 | --------------------------------------- | ----------------------------- |
-| Backend API (Fastify, Prisma, routes)   | Valeri Kamburov, Rok Krajnc   |
+| Backend API (Fastify, Prisma, routes)   | Vsi  |
 | Spletna aplikacija (React, dashboard)   | Vsi                           |
 | Mobilna aplikacija (React Native, Expo) | Valeri Kamburov               |
 | Baza podatkov (shema, migracije)        | Luka Crešnar, Valeri Kamburov |
@@ -1250,7 +1228,7 @@ Koda se avtomatsko analizira ob vsakem pushu/PR na `main` prek `sonar.yml` GitHu
 
 - **Offline podpora je omejena na tahografska stanja** — mobilna aplikacija podpira offline beleženje tahografskih stanj prek lokalnega `AsyncStorage` casha z avtomatsko sinhronizacijo. Ročni vnos vožnje (`NovaVoznjaScreen`) zahteva aktivno internetno povezavo. Čakajoči zahtevki se izgubijo ob prisilnem zaprtju aplikacije pred sinhronizacijo.
 - **Mock lokacije na dashboardu** — Leaflet karta na admin dashboardu prikazuje zadnje znane lokacije voznikov iz tahografskih zapisov, ki niso nujno v realnem času. Prava real-time sledenje bi zahtevalo WebSocket ali SSE integracijo.
-- **Python subprocess overhead** — vsak uvoz DDD datoteke zažene nov Python proces (~1-2s latency). Za produkcijo z veliko uvoži bi bila boljša rešitev Python Worker Service z message queue.
+- **Python subprocess overhead** — vsak uvoz excel datoteke zažene nov Python proces (~1-2s latency). Za produkcijo z veliko uvoži bi bila boljša rešitev Python Worker Service z message queue.
 - **Refresh token brez rotacije** — trenutna implementacija ne rotira refresh tokenov ob vsaki uporabi, kar zmanjšuje varnost pri kraji tokena.
 - **EMŠO šifrirni ključ v env** — ključ za AES-256-GCM je shranjen v okoljski spremenljivki, ne v namenski key management rešitvi (npr. HashiCorp Vault, AWS KMS).
 - **Tehnični dolg v shemi** — polja `aktivnost`, `registerska`, `posadka`, `trajanje` so bila del originalnega `Voznja` modela in so bila odstranjena v refactoringu. Migracija je čista, ampak obstoječi podatki iz pred-migracijske faze nimajo `fk_vozilo` in `fk_stranka` vrednosti.
@@ -1399,3 +1377,14 @@ SUS ocena se izračuna po standardni formuli:
 | Najvišja ocena (trditev) | 77,5 (Voznik — mobilna app) |
 
 > Povprečna SUS ocena 76,7 uvršča sistem v razred B (dobro — nad povprečjem), kar potrjuje uspešnost zasnove uporabniškega vmesnika. Mobilna aplikacija je bila med vozniki ocenjena višje (77,5) zaradi intuitivnega tahografskega modula in enostavnega vnosa voženj, medtem ko je spletni administrativni vmesnik dosegel nekoliko nižjo oceno (75,0) zaradi večje funkcionalne kompleksnosti. Kot področje za izboljšavo so udeleženci izpostavili poenostavitev nekaterih administrativnih tokov za nove uporabnike.
+
+
+---
+
+## 18. Možne nadgradnje v prihodnosti
+
+V sklopu projekta smo s stranko (Sirena d.o.o.) identificirali več potencialnih razširitev sistema, ki bi dodatno povečale njegovo vrednost v poslovnem okolju.
+
+- **Neposredno branje DDD datotek** — Implementacija lastnega parserja za binarni EU Digital Tachograph format je bila preučena, vendar se je izkazala kot izjemno zahtevna zaradi stroge zakonodajske regulacije formata ( in odsotnosti odprtokodnih knjižnic z zadostno pokritostjo formatov. Funkcionalnost ostaja odprta za prihodnje iteracije.
+- **Generiranje računov** — Avtomatsko generiranje računov na podlagi opravljenih prevozov in dogovorjenih cen s strankami, z izvozom v PDF format.
+- **Modul za upravljanje avtodelavnice** — Dodaten odsek za beleženje servisnih posegov, tehničnih pregledov, sledenje inventarja in materialov za avtodelavnico

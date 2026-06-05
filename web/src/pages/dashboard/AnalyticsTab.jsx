@@ -361,6 +361,7 @@ export default function AnalyticsTab() {
       .sort(([a], [b]) => a.localeCompare(b))
       .slice(-6)
       .map(([m, x]) => ({
+        _month: m,
         label:  m.slice(5) + '/' + m.slice(2, 4),
         value:  Math.round(x.skupaj * 100) / 100,
         value2: Math.round(x.placano * 100) / 100,
@@ -517,17 +518,24 @@ export default function AnalyticsTab() {
           : <DnevnaStanjaGraf stanjeByVoznik={stanjeByVoznik} />}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
-          <h3 className="text-sm font-bold text-gray-800 mb-1">Prihodki – zadnjih 6 mesecev</h3>
-          <div className="h-80">
-            {monthlyRevenueTrend.length > 0
-              ? <VBarChart data={monthlyRevenueTrend} color="#059669" color2="#059669" labelKey="label" valueKey="value" value2Key="value2" />
-              : <p className="text-xs text-gray-400 text-center pt-8">Ni podatkov o prihodkih.</p>}
-          </div>
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+        <h3 className="text-sm font-bold text-gray-800 mb-1">Prihodki – zadnjih 6 mesecev</h3>
+        {monthlyRevenueTrend.length > 0 && (() => {
+          const fmt = (m) => new Date(m + '-01').toLocaleDateString('sl-SI', { month: 'long', year: 'numeric' });
+          return (
+            <p className="text-xs text-gray-400 mb-3">
+              {fmt(monthlyRevenueTrend[0]._month)} – {fmt(monthlyRevenueTrend[monthlyRevenueTrend.length - 1]._month)}
+            </p>
+          );
+        })()}
+        <div className="h-96">
+          {monthlyRevenueTrend.length > 0
+            ? <VBarChart data={monthlyRevenueTrend} color="#059669" color2="#059669" labelKey="label" valueKey="value" value2Key="value2" />
+            : <p className="text-xs text-gray-400 text-center pt-8">Ni podatkov o prihodkih.</p>}
         </div>
+      </div>
 
-        <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
+      <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h3 className="text-sm font-bold text-gray-800 mb-1">Top stranke — {period}</h3>
           <p className="text-xs text-gray-400 mb-3">Vrednost prevozov po stranki</p>
           {topStranke.length === 0
@@ -551,7 +559,6 @@ export default function AnalyticsTab() {
                 })}
               </div>
             )}
-        </div>
       </div>
     </div>
   );
