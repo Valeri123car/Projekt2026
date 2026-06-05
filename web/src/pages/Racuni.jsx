@@ -15,7 +15,7 @@ function SortIcon({ active, dir }) {
 }
 
 export default function Racuni() {
-  const [urnik, setUrnik] = useState([]);
+  const [voznje, setVoznje] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [togglingId, setTogglingId] = useState(null);
@@ -30,12 +30,12 @@ export default function Racuni() {
   const [sortDir, setSortDir] = useState('desc');
   const [currentPage, setCurrentPage] = useState(1);
 
-  const fetchUrnik = async () => {
+  const fetchVoznje = async () => {
     try {
       setLoading(true);
       setError(null);
-      const res = await api.get('/admin/urnik');
-      setUrnik(res.data || []);
+      const res = await api.get('/admin/voznje');
+      setVoznje(res.data || []);
     } catch (e) {
       setError(e.response?.data?.error || 'Napaka pri nalaganju podatkov.');
     } finally {
@@ -43,16 +43,16 @@ export default function Racuni() {
     }
   };
 
-  useEffect(() => { fetchUrnik(); }, []);
+  useEffect(() => { fetchVoznje(); }, []);
   useEffect(() => { setCurrentPage(1); }, [searchQuery, filterStranka, filterPlacano, filterOd, filterDo, sortField, sortDir]);
 
   const togglePlacano = async (item) => {
     try {
-      setTogglingId(item.id_urnik);
-      await api.put(`/admin/urnik/${item.id_urnik}`, { placano: !item.placano });
-      setUrnik((prev) => prev.map((u) => u.id_urnik === item.id_urnik ? { ...u, placano: !u.placano } : u));
+      setTogglingId(item.id_voznja);
+      await api.put(`/admin/voznje/${item.id_voznja}`, { placano: !item.placano });
+      setVoznje((prev) => prev.map((u) => u.id_voznja === item.id_voznja ? { ...u, placano: !u.placano } : u));
     } catch (e) {
-      const msg = e.response?.data?.error || e.response?.data?.message || e.message || 'Napaka pri posodabljanju statusa plačila.';
+      const msg = e.response?.data?.error || e.message || 'Napaka pri posodabljanju statusa plačila.';
       setError(`Napaka pri posodabljanju statusa plačila: ${msg}`);
     } finally {
       setTogglingId(null);
@@ -67,18 +67,18 @@ export default function Racuni() {
   // Unique stranke for dropdown
   const strankeOptions = useMemo(() => {
     const map = new Map();
-    urnik.forEach((u) => {
+    voznje.forEach((u) => {
       if (u.stranka) map.set(u.stranka.id_stranka, u.stranka.naziv);
     });
     return [...map.entries()].sort((a, b) => a[1].localeCompare(b[1]));
-  }, [urnik]);
+  }, [voznje]);
 
   const filtered = useMemo(() => {
-    let data = [...urnik];
+    let data = [...voznje];
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       data = data.filter((u) =>
-        (u.naziv ?? '').toLowerCase().includes(q) ||
+        (u.relacija ?? '').toLowerCase().includes(q) ||
         (u.stranka?.naziv ?? '').toLowerCase().includes(q)
       );
     }
@@ -100,7 +100,7 @@ export default function Racuni() {
       return 0;
     });
     return data;
-  }, [urnik, searchQuery, filterStranka, filterPlacano, filterOd, filterDo, sortField, sortDir]);
+  }, [voznje, searchQuery, filterStranka, filterPlacano, filterOd, filterDo, sortField, sortDir]);
 
   const totalPages = Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE));
   const paginated = useMemo(() => {
@@ -113,21 +113,21 @@ export default function Racuni() {
 
   // Stats
   const stats = useMemo(() => {
-    const withCena = urnik.filter((u) => u.cena != null);
+    const withCena = voznje.filter((u) => u.cena != null);
     return {
-      skupaj:      urnik.length,
-      placanoCount: urnik.filter((u) =>  u.placano).length,
-      neplacanoCount: urnik.filter((u) => !u.placano).length,
+      skupaj:      voznje.length,
+      placanoCount: voznje.filter((u) =>  u.placano).length,
+      neplacanoCount: voznje.filter((u) => !u.placano).length,
       skupajCena:  withCena.reduce((s, u) => s + u.cena, 0),
       placanoSum:  withCena.filter((u) =>  u.placano).reduce((s, u) => s + u.cena, 0),
       neplacanoSum: withCena.filter((u) => !u.placano).reduce((s, u) => s + u.cena, 0),
     };
-  }, [urnik]);
+  }, [voznje]);
 
   // Per-stranka summary (for active filter only — shown when no stranka is filtered)
   const strankaSummary = useMemo(() => {
     const map = new Map();
-    urnik.forEach((u) => {
+    voznje.forEach((u) => {
       const key = u.fk_stranka;
       if (!key) return;
       if (!map.has(key)) map.set(key, { naziv: u.stranka?.naziv ?? '—', skupaj: 0, placano: 0, neplacano: 0, vsota: 0, neplacanoVsota: 0 });
@@ -137,7 +137,7 @@ export default function Racuni() {
       else { s.neplacano++; if (u.cena) s.neplacanoVsota += u.cena; }
     });
     return [...map.values()].sort((a, b) => b.neplacanoVsota - a.neplacanoVsota);
-  }, [urnik]);
+  }, [voznje]);
 
   const Th = ({ field, label }) => (
     <th
@@ -164,7 +164,7 @@ export default function Racuni() {
           </div>
           <button
             type="button"
-            onClick={fetchUrnik}
+            onClick={fetchVoznje}
             disabled={loading}
             className="self-start md:self-auto inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60"
           >
@@ -227,7 +227,7 @@ export default function Racuni() {
                   onClick={() => setFilterStranka(
                     filterStranka === String([...strankaSummary].find((x) => x.naziv === s.naziv))
                       ? 'vse'
-                      : String(urnik.find((u) => u.stranka?.naziv === s.naziv)?.fk_stranka ?? 'vse')
+                      : String(voznje.find((u) => u.stranka?.naziv === s.naziv)?.fk_stranka ?? 'vse')
                   )}
                   className="text-left rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:border-blue-300 hover:bg-blue-50/30 transition-colors"
                 >
@@ -313,13 +313,13 @@ export default function Racuni() {
         </section>
 
         {/* Table */}
-        {loading && !urnik.length ? (
+        {loading && !voznje.length ? (
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-slate-500 shadow-sm">
             Nalaganje…
           </div>
         ) : filtered.length === 0 ? (
           <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-slate-500 shadow-sm">
-            {urnik.length === 0 ? 'Ni prevozov' : 'Ni rezultatov za iskanje'}
+            {voznje.length === 0 ? 'Ni prevozov' : 'Ni rezultatov za iskanje'}
           </div>
         ) : (
           <section className="overflow-hidden rounded-xl border border-slate-300 bg-white shadow-sm">
@@ -337,7 +337,7 @@ export default function Racuni() {
                 </thead>
                 <tbody>
                   {paginated.map((u) => (
-                    <tr key={u.id_urnik} className="border-t border-slate-200 hover:bg-slate-50/80">
+                    <tr key={u.id_voznja} className="border-t border-slate-200 hover:bg-slate-50/80">
                       <td className="px-4 py-4">
                         <div className="flex items-center gap-3">
                           <span className="material-symbols-outlined rounded-lg bg-slate-100 p-2 text-slate-500">calendar_today</span>
@@ -349,7 +349,7 @@ export default function Racuni() {
                         {u.stranka?.telefonska && <p className="text-xs text-slate-400">{u.stranka.telefonska}</p>}
                       </td>
                       <td className="px-4 py-4 text-sm text-slate-600 max-w-[180px] truncate">
-                        {u.naziv || '-'}
+                        {u.relacija || '-'}
                       </td>
                       <td className="px-4 py-4 text-sm text-slate-600">
                         {u.uporabnik ? `${u.uporabnik.ime} ${u.uporabnik.priimek}` : '-'}
@@ -361,7 +361,7 @@ export default function Racuni() {
                         <button
                           type="button"
                           onClick={() => setConfirmItem(u)}
-                          disabled={togglingId === u.id_urnik}
+                          disabled={togglingId === u.id_voznja}
                           className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold border transition-colors disabled:opacity-60 ${
                             u.placano
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
@@ -369,7 +369,7 @@ export default function Racuni() {
                           }`}
                         >
                           <span className="material-symbols-outlined text-[14px]">
-                            {togglingId === u.id_urnik ? 'sync' : u.placano ? 'check_circle' : 'radio_button_unchecked'}
+                            {togglingId === u.id_voznja ? 'sync' : u.placano ? 'check_circle' : 'radio_button_unchecked'}
                           </span>
                           {u.placano ? 'Plačano' : 'Neplačano'}
                         </button>
@@ -385,7 +385,7 @@ export default function Racuni() {
               <div>
                 <span>
                   Prikazano {startRow}–{endRow} od {filtered.length}
-                  {filtered.length !== urnik.length && <span className="ml-1 text-slate-400">(filtrirano iz {urnik.length})</span>}
+                  {filtered.length !== voznje.length && <span className="ml-1 text-slate-400">(filtrirano iz {voznje.length})</span>}
                 </span>
                 {filtered.some((u) => u.cena != null) && (
                   <span className="ml-3 font-semibold text-slate-700">
@@ -432,18 +432,12 @@ export default function Racuni() {
               ?
             </p>
             <div className="flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => setConfirmItem(null)}
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
-              >
+              <button type="button" onClick={() => setConfirmItem(null)}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
                 Prekliči
               </button>
-              <button
-                type="button"
-                onClick={() => { togglePlacano(confirmItem); setConfirmItem(null); }}
-                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
-              >
+              <button type="button" onClick={() => { togglePlacano(confirmItem); setConfirmItem(null); }}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700">
                 Potrdi
               </button>
             </div>

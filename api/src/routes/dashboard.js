@@ -18,37 +18,31 @@ const protectedOnly = async (request, reply) => {
 function buildDashboardFilters(query) {
   const { fk_uporabnik, fk_stranka, od, do: do_ } = query;
   const whereVoznje = {};
-  const whereUrnik = {};
 
   if (fk_uporabnik) {
     whereVoznje.fk_uporabnik = parseInt(fk_uporabnik);
-    whereUrnik.fk_uporabnik = parseInt(fk_uporabnik);
   }
 
   if (fk_stranka) {
-    whereUrnik.fk_stranka = parseInt(fk_stranka);
+    whereVoznje.fk_stranka = parseInt(fk_stranka);
   }
 
   if (od || do_) {
-    whereVoznje.zacetek = {};
-    whereUrnik.datum = {};
- 
+    whereVoznje.datum = {};
+
     if (od) {
-      whereVoznje.zacetek.gte = new Date(od);
-      whereUrnik.datum.gte = new Date(od);
+      whereVoznje.datum.gte = new Date(od);
     }
- 
+
     if (do_) {
       const toDate = new Date(do_);
       toDate.setHours(23, 59, 59, 999);
-      whereVoznje.zacetek.lte = toDate;
-      whereUrnik.datum.lte = toDate;
+      whereVoznje.datum.lte = toDate;
     }
   }
 
   return {
     whereVoznje,
-    whereUrnik,
     fk_uporabnik: fk_uporabnik ? parseInt(fk_uporabnik) : null,
   };
 }
@@ -166,18 +160,18 @@ function formatRecentRide(ride) {
   };
 }
  
-function buildAlerts({ voznje, urniki, statistics }) {
+function buildAlerts({ voznje, statistics }) {
   const alerts = [];
- 
+
   const longestRide = voznje.reduce((max, ride) => {
     const h = calculateRideHours(ride);
     return h > max ? h : max;
   }, 0);
- 
-  const unpaidRevenue = urniki
-    .filter((u) => !u.placano)
+
+  const unpaidRevenue = voznje
+    .filter((u) => !u.placano && u.cena)
     .reduce((sum, u) => sum + (u.cena || 0), 0);
- 
+
   if (longestRide >= 8) {
     alerts.push({
       id: 1,
@@ -187,17 +181,17 @@ function buildAlerts({ voznje, urniki, statistics }) {
       icon: "warning",
     });
   }
- 
+
   if (unpaidRevenue > 0) {
     alerts.push({
       id: 2,
       type: "info",
-      title: "Neplačani urniki",
+      title: "Neplačani prevozi",
       description: `Neplačani znesek znaša €${unpaidRevenue.toFixed(2)}`,
       icon: "receipt_long",
     });
   }
- 
+
   alerts.push({
     id: 3,
     type: "success",
@@ -205,7 +199,7 @@ function buildAlerts({ voznje, urniki, statistics }) {
     description: `${statistics.currentlyDriving} voznikov trenutno vozi`,
     icon: "check_circle",
   });
- 
+
   return alerts;
 }
 
@@ -277,31 +271,20 @@ async function loadRoutesList(app, query) {
 }
  
 async function loadDashboardData(app, query) {
-  const { whereVoznje, whereUrnik } = buildDashboardFilters(query);
- 
-  const [voznje, urniki, vozniki, racuni] = await Promise.all([
+  const { whereVoznje } = buildDashboardFilters(query);
+
+  const [voznje, vozniki] = await Promise.all([
     app.prisma.voznja.findMany({
       where: whereVoznje,
-      orderBy: { zacetek: "desc" },
+      orderBy: { datum: "desc" },
       include: {
         uporabnik: { select: { ime: true, priimek: true } },
-      },
-    }),
-    app.prisma.urnik.findMany({
-      where: whereUrnik,
-      include: {
         stranka: { select: { naziv: true } },
-        uporabnik: { select: { ime: true, priimek: true } },
       },
     }),
     app.prisma.uporabnik.findMany({
       where: { dostop: 1 },
       select: { id_uporabnik: true, ime: true, priimek: true },
-    }),
-    app.prisma.racun.findMany({
-      where: query.fk_uporabnik
-        ? { fk_uporabnik: parseInt(query.fk_uporabnik) }
-        : {},
     }),
   ]);
  
@@ -331,11 +314,10 @@ async function loadDashboardData(app, query) {
   const totalHours = voznje.reduce((acc, r) => acc + calculateRideHours(r), 0);
   const recentRides = voznje.slice(0, 5).map(formatRecentRide);
   const totalKm = voznje.reduce((acc, r) => acc + Math.max(0, Math.round(calculateRideHours(r) * 62)), 0);
-  const totalRevenue = urniki.reduce((acc, u) => acc + (u.cena || 0), 0);
-  const placaniPrihodki = urniki
+  const totalRevenue = voznje.reduce((acc, u) => acc + (u.cena || 0), 0);
+  const placaniPrihodki = voznje
     .filter((u) => u.placano)
     .reduce((acc, u) => acc + (u.cena || 0), 0);
-  const skupnaPlaca = racuni.reduce((acc, r) => acc + (r.placa || 0), 0);
  
   const statistics = {
     totalHours: Math.round(totalHours * 100) / 100,
@@ -358,21 +340,21 @@ async function loadDashboardData(app, query) {
     };
   });
  
-  const prihodkiPoStranki = urniki.reduce((acc, u) => {
+  const prihodkiPoStranki = voznje.reduce((acc, u) => {
     const naziv = u.stranka?.naziv || "Neznana stranka";
     if (!acc[naziv]) acc[naziv] = 0;
     acc[naziv] += u.cena || 0;
     return acc;
   }, {});
- 
-  const prihodkiPoMesecih = urniki.reduce((acc, u) => {
+
+  const prihodkiPoMesecih = voznje.reduce((acc, u) => {
     const mesec = new Date(u.datum).toISOString().slice(0, 7);
     if (!acc[mesec]) acc[mesec] = 0;
     acc[mesec] += u.cena || 0;
     return acc;
   }, {});
- 
-  const alerts = buildAlerts({ voznje, urniki, statistics });
+
+  const alerts = buildAlerts({ voznje, statistics });
  
   return {
     statistics,
@@ -383,11 +365,9 @@ async function loadDashboardData(app, query) {
         skupne_ure: Math.round(totalHours * 100) / 100,
         skupni_km: totalKm,
         st_vozenj: voznje.length,
-        st_urnikov: urniki.length,
         skupni_prihodki: Math.round(totalRevenue * 100) / 100,
         placani_prihodki: Math.round(placaniPrihodki * 100) / 100,
         neplacani_prihodki: Math.round((totalRevenue - placaniPrihodki) * 100) / 100,
-        skupna_placa: Math.round(skupnaPlaca * 100) / 100,
         trenutno_vozi: currentlyDrivingIds.size,
         aktivni_vozniki: activeDriverIds.size,
         skupaj_vozniki: actualDrivers.length,

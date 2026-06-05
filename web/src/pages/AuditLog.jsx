@@ -16,7 +16,6 @@ const URL_KATEGORIJA = {
   "/api/v1/racuni":    { label: "Računi",           ikona: "receipt",              barva: "#166534" },
   "/api/v1/stranke":   { label: "Stranke",          ikona: "people",               barva: "#6b21a8" },
   "/api/v1/vozila":    { label: "Vozila",           ikona: "airport_shuttle",      barva: "#92400e" },
-  "/api/v1/urnik":     { label: "Urnik",            ikona: "calendar_month",       barva: "#c2410c" },
   "/api/v1/dashboard": { label: "Dashboard",        ikona: "dashboard",            barva: "#374151" },
   "/api/v1/tahograf":  { label: "Tahograf",         ikona: "speed",                barva: "#0f766e" },
   "/api/v1/log":       { label: "Log",              ikona: "history",              barva: "#374151" },

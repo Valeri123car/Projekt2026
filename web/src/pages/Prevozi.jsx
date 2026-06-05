@@ -293,7 +293,7 @@ export default function Prevozi() {
   const togglePlacano = async (prevoz) => {
     try {
       setTogglingId(prevoz.id_voznja);
-      await api.patch(`/voznje/${prevoz.id_voznja}/placano`, { placano: !prevoz.placano });
+      await api.put(`/admin/voznje/${prevoz.id_voznja}`, { placano: !prevoz.placano });
       setVoznje((prev) => prev.map((v) => v.id_voznja === prevoz.id_voznja ? { ...v, placano: !v.placano } : v));
     } catch {
       setError('Napaka pri posodabljanju statusa plačila');

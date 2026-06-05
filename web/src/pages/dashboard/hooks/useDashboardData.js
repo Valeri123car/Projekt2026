@@ -8,7 +8,7 @@ export function useDashboardData() {
     activeDrivers: 0,
     totalDrivers: 0,
   });
-  const [urnikAll, setUrnikAll] = useState([]);
+  const [voznjeAll, setVoznjeAll] = useState([]);
   const [totalVozniki, setTotalVozniki] = useState(0);
   const [dashTahData, setDashTahData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -27,17 +27,17 @@ export function useDashboardData() {
         ).getDate();
         const doDate = `${curMonth}-${String(lastDay).padStart(2, "0")}`;
 
-        const [statsRes, urnikRes, voznikiRes, tahRes] =
+        const [statsRes, voznjeRes, voznikiRes, tahRes] =
           await Promise.allSettled([
             api.get("/dashboard/statistics"),
-            api.get("/admin/urnik"),
+            api.get("/admin/voznje"),
             api.get("/admin/vozniki"),
             api.get(`/admin/tahograf?od=${od}&do=${doDate}`),
           ]);
 
         if (statsRes.status === "fulfilled") setStatistics(statsRes.value.data);
-        if (urnikRes.status === "fulfilled")
-          setUrnikAll(urnikRes.value.data || []);
+        if (voznjeRes.status === "fulfilled")
+          setVoznjeAll(voznjeRes.value.data || []);
         if (voznikiRes.status === "fulfilled")
           setTotalVozniki((voznikiRes.value.data || []).length);
         if (tahRes.status === "fulfilled")
@@ -52,17 +52,17 @@ export function useDashboardData() {
 
   const recentPrevozi = useMemo(() => {
     const curMonth = new Date().toISOString().slice(0, 7);
-    return [...urnikAll]
+    return [...voznjeAll]
       .filter((u) => new Date(u.datum).toISOString().slice(0, 7) === curMonth)
       .sort((a, b) => new Date(b.datum) - new Date(a.datum));
-  }, [urnikAll]);
+  }, [voznjeAll]);
 
   const neplacaniAlerts = useMemo(
     () =>
-      urnikAll
+      voznjeAll
         .filter((u) => !u.placano && u.cena != null && u.cena > 0)
         .sort((a, b) => new Date(b.datum) - new Date(a.datum)),
-    [urnikAll],
+    [voznjeAll],
   );
 
   const complianceAlerts = useMemo(() => {
@@ -99,14 +99,14 @@ export function useDashboardData() {
 
   const todayPrevozi = useMemo(() => {
     const today = new Date().toISOString().slice(0, 10);
-    return [...urnikAll]
+    return [...voznjeAll]
       .filter((u) => new Date(u.datum).toISOString().slice(0, 10) === today)
       .sort((a, b) => new Date(a.datum) - new Date(b.datum));
-  }, [urnikAll]);
+  }, [voznjeAll]);
 
   return {
     statistics,
-    urnikAll,
+    voznjeAll,
     totalVozniki,
     dashTahData,
     loading,

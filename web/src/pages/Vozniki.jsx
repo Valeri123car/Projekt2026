@@ -31,35 +31,6 @@ const isoDate = (d) => {
   return `${y}-${m}-${day}`;
 };
 
-const normalizeForCalendar = (urnikEntries, voznjeEntries) => {
-  const fromUrnik = urnikEntries.map((e) => ({
-    id_urnik:     e.id_urnik,
-    datum:        e.datum,
-    fk_uporabnik: e.fk_uporabnik,
-    uporabnik:    e.uporabnik,
-    stranka:      e.stranka,
-    vozilo:       e.vozilo,
-    naziv:        e.naziv,
-    cena:         e.cena,
-    placano:      e.placano,
-    _vir:         'urnik',
-  }));
-
-  const fromVoznje = voznjeEntries.map((e) => ({
-    id_urnik:     `v_${e.id_voznja}`,
-    datum:        e.datum || e.zacetek,
-    fk_uporabnik: e.fk_uporabnik,
-    uporabnik:    e.uporabnik,
-    stranka:      e.stranka ? { naziv: e.stranka } : null,
-    vozilo:       e.registerska ? { registracija: e.registerska } : null,
-    naziv:        e.relacija || e.opis || null,
-    cena:         null,
-    placano:      false,
-    _vir:         'voznja',
-  }));
-
-  return [...fromUrnik, ...fromVoznje];
-};
 
 const getStatusLabel = (dostop) => (dostop === 2 ? 'ADMIN' : 'VOZNIK');
 
@@ -96,7 +67,7 @@ function EventDetailModal({ events, driverColorMap, onClose }) {
           {events.map((ev, i) => {
             const color = driverColorMap[ev.fk_uporabnik] ?? DRIVER_COLORS[0];
             return (
-              <div key={ev.id_urnik ?? i} className="px-6 py-4">
+              <div key={ev.id_voznja ?? i} className="px-6 py-4">
                 <div className="mb-3 flex items-center gap-2">
                   <span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold text-white ${color.bg}`}>
                     <span className="material-symbols-outlined text-[14px]">person</span>
@@ -122,12 +93,12 @@ function EventDetailModal({ events, driverColorMap, onClose }) {
                   </div>
                   <div>
                     <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Vozilo</p>
-                    <p className="mt-0.5 font-medium text-slate-800">{ev.vozilo ? (ev.vozilo.registracija ?? ev.vozilo.naziv ?? `#${ev.fk_vozilo}`) : '-'}</p>
+                    <p className="mt-0.5 font-medium text-slate-800">{ev.vozilo ? (ev.vozilo.registerska ?? `#${ev.fk_vozilo}`) : '-'}</p>
                   </div>
-                  {ev.naziv && (
+                  {ev.relacija && (
                     <div className="col-span-2">
-                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Relacija / Naziv</p>
-                      <p className="mt-0.5 font-medium text-slate-800">{ev.naziv}</p>
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Relacija</p>
+                      <p className="mt-0.5 font-medium text-slate-800">{ev.relacija}</p>
                     </div>
                   )}
                 </div>
@@ -141,7 +112,7 @@ function EventDetailModal({ events, driverColorMap, onClose }) {
 }
 
 // ─── Calendar ─────────────────────────────────────────────────────────────────
-function DriversCalendar({ urnik, vozniki }) {
+function DriversCalendar({ voznje, vozniki }) {
   const today                                     = new Date();
   const [viewYear, setViewYear]                   = useState(today.getFullYear());
   const [viewMonth, setViewMonth]                 = useState(today.getMonth());
@@ -156,14 +127,14 @@ function DriversCalendar({ urnik, vozniki }) {
 
   const eventsByDate = useMemo(() => {
     const map      = {};
-    const filtered = filterDriver === 'vse' ? urnik : urnik.filter((e) => String(e.fk_uporabnik) === String(filterDriver));
+    const filtered = filterDriver === 'vse' ? voznje : voznje.filter((e) => String(e.fk_uporabnik) === String(filterDriver));
     filtered.forEach((entry) => {
       const key = isoDate(entry.datum);
       if (!map[key]) map[key] = [];
       map[key].push(entry);
     });
     return map;
-  }, [urnik, filterDriver]);
+  }, [voznje, filterDriver]);
 
   const calendarDays = useMemo(() => {
     const firstDay    = new Date(viewYear, viewMonth, 1);
@@ -206,7 +177,7 @@ function DriversCalendar({ urnik, vozniki }) {
             <span className="material-symbols-outlined rounded-lg bg-blue-50 p-1.5 text-blue-600 text-[20px]">calendar_month</span>
             <div>
               <h2 className="text-sm font-semibold text-slate-800">Urnik voženj</h2>
-              <p className="text-xs text-slate-500">{urnik.length} vnosov skupaj</p>
+              <p className="text-xs text-slate-500">{voznje.length} vnosov skupaj</p>
             </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -451,8 +422,8 @@ export default function Vozniki() {
   const [loading, setLoading]               = useState(true);
   const [error, setError]                   = useState(null);
   const [currentPage, setCurrentPage]       = useState(1);
-  const [urnik, setUrnik]                   = useState([]);
-  const [urnikLoading, setUrnikLoading]     = useState(false);
+  const [voznje, setVoznje]                 = useState([]);
+  const [voznjeLoading, setVoznjeLoading]   = useState(false);
   const [selectedDriver, setSelectedDriver] = useState(null);
   const [dateFrom, setDateFrom]             = useState('');
   const [dateTo, setDateTo]                 = useState('');
@@ -479,22 +450,19 @@ export default function Vozniki() {
     }
   };
 
-  const fetchUrnik = async () => {
+  const fetchVoznje = async () => {
     try {
-      setUrnikLoading(true);
-      const [urnikRes, voznjeRes] = await Promise.all([
-        api.get('/admin/urnik').catch(() => ({ data: [] })),
-        api.get('/admin/voznje').catch(() => ({ data: [] })),
-      ]);
-      setUrnik(normalizeForCalendar(urnikRes.data || [], voznjeRes.data || []));
+      setVoznjeLoading(true);
+      const res = await api.get('/admin/voznje').catch(() => ({ data: [] }));
+      setVoznje(res.data || []);
     } catch (err) {
       console.error('Error fetching calendar data:', err);
     } finally {
-      setUrnikLoading(false);
+      setVoznjeLoading(false);
     }
   };
 
-  useEffect(() => { fetchVozniki(); fetchUrnik(); }, []);
+  useEffect(() => { fetchVozniki(); fetchVoznje(); }, []);
   useEffect(() => { setCurrentPage(1); }, [vozniki.length]);
 
   const fetchVoznjeForDriver = async (driverId, od = '', doV = '') => {
@@ -731,7 +699,7 @@ export default function Vozniki() {
             <h1 className="text-2xl sm:text-3xl font-bold text-slate-900">Vozniki</h1>
             <p className="text-slate-500 mt-1">Pregled vseh voznikov v bazi podatkov</p>
           </div>
-          <button type="button" onClick={() => { fetchVozniki(); fetchUrnik(); }} disabled={loading}
+          <button type="button" onClick={() => { fetchVozniki(); fetchVoznje(); }} disabled={loading}
             className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-60 self-start md:self-auto">
             <span className="material-symbols-outlined text-[18px]">refresh</span>
             {loading ? 'Osvežujem...' : 'Osveži'}
@@ -774,10 +742,10 @@ export default function Vozniki() {
           </section>
         )}
 
-        {urnikLoading ? (
-          <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-slate-500 shadow-sm">Nalaganje urnika...</div>
+        {voznjeLoading ? (
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-10 text-center text-slate-500 shadow-sm">Nalaganje voženj...</div>
         ) : (
-          <DriversCalendar urnik={urnik} vozniki={vozniki} />
+          <DriversCalendar voznje={voznje} vozniki={vozniki} />
         )}
       </main>
     </div>

@@ -16,7 +16,7 @@ function PrevozRow({ u }) {
         {u.uporabnik ? `${u.uporabnik.ime} ${u.uporabnik.priimek}` : '—'}
       </td>
       <td className="px-3 py-3 text-gray-700 whitespace-nowrap">{u.vozilo?.registerska ?? '—'}</td>
-      <td className="px-3 py-3 text-gray-500 max-w-[160px] truncate">{u.naziv ?? '—'}</td>
+      <td className="px-3 py-3 text-gray-500 max-w-[160px] truncate">{u.relacija ?? '—'}</td>
       <td className="px-3 py-3 font-semibold text-gray-800 whitespace-nowrap">
         {u.cena != null ? fmt.format(u.cena) : '—'}
       </td>
@@ -49,17 +49,17 @@ function TodayPrevoziCard({ todayPrevozi }) {
   return (
     <div className="space-y-3">
       {todayPrevozi.map((u) => (
-        <div key={u.id_urnik} className="flex items-center gap-4 p-3 rounded-lg border border-gray-100 hover:bg-gray-50">
+        <div key={u.id_voznja} className="flex items-center gap-4 p-3 rounded-lg border border-gray-100 hover:bg-gray-50">
           <div className="flex-shrink-0 text-center w-12">
             <p className="text-xs text-gray-400">ura</p>
             <p className="text-sm font-bold text-gray-800">
-              {new Date(u.datum).toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit' })}
+              {new Date(u.zacetek || u.datum).toLocaleTimeString('sl-SI', { hour: '2-digit', minute: '2-digit' })}
             </p>
           </div>
           <div className="flex-1 min-w-0">
             <p className="text-sm font-semibold text-gray-900 truncate">{u.stranka?.naziv ?? '—'}</p>
             <p className="text-xs text-gray-500 truncate">
-              {u.naziv ?? ''}{u.vozilo ? ` · ${u.vozilo.registerska}` : ''}
+              {u.relacija ?? ''}{u.vozilo ? ` · ${u.vozilo.registerska}` : ''}
             </p>
           </div>
           <div className="flex-shrink-0 text-right">
@@ -103,7 +103,7 @@ function OpozorilaPannel({ complianceAlerts, neplacaniAlerts }) {
         </div>
       ))}
       {neplacaniAlerts.map((u) => (
-        <div key={u.id_urnik} className="flex gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
+        <div key={u.id_voznja} className="flex gap-3 p-3 rounded-lg bg-amber-50 border border-amber-200">
           <span className="material-symbols-outlined text-amber-600 text-[18px] shrink-0 mt-0.5">payments</span>
           <div className="min-w-0">
             <p className="text-sm font-semibold text-amber-900">Neplačani prevoz</p>
@@ -204,7 +204,7 @@ export default function DashboardTab({ totalVozniki, skupneUre, ureLoading, rece
                 </tr>
               </thead>
               <tbody>
-                {recentPrevozi.map((u) => <PrevozRow key={u.id_urnik} u={u} />)}
+                {recentPrevozi.map((u) => <PrevozRow key={u.id_voznja} u={u} />)}
               </tbody>
             </table>
           </div>

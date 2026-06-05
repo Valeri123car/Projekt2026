@@ -14,7 +14,6 @@ async function auditPlugin(app) {
       "/api/v1/dashboard",
       "/api/v1/stranke",
       "/api/v1/vozila",
-      "/api/v1/urnik",
       "/api/v1/tahograf",
     ];
 

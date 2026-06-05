@@ -6,8 +6,8 @@ import useAuthStore from "../store/authStore";
 
 const ITEMS_PER_PAGE = 20;
 
-const HEADERS_VOZNIK = ["Začetek", "Konec", "Trajanje", "Relacija", "Stranka", "Opis", "Plačano"];
-const HEADERS_ADMIN  = ["Voznik", "Začetek", "Konec", "Trajanje", "Relacija", "Stranka", "Opis", "Plačano"];
+const HEADERS_VOZNIK = ["Začetek", "Konec", "Trajanje", "Relacija", "Stranka", "Opis"];
+const HEADERS_ADMIN  = ["Voznik", "Začetek", "Konec", "Trajanje", "Relacija", "Stranka", "Opis"];
 
 function formatDateTime(dateString) {
   const date = new Date(dateString);
@@ -85,7 +85,6 @@ export default function Voznje() {
   const [selectedFile, setSelectedFile]     = useState(null);
   const [currentPage, setCurrentPage]       = useState(1);
   const [activeTab, setActiveTab]           = useState("voznje");
-  const [placanoLoading, setPlacanoLoading] = useState(null);
 
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo]     = useState("");
@@ -134,19 +133,6 @@ export default function Voznje() {
     }
   };
 
-  const togglePlacano = async (voznja) => {
-    setPlacanoLoading(voznja.id_voznja);
-    try {
-      await api.patch(`/voznje/${voznja.id_voznja}/placano`, { placano: !voznja.placano });
-      setVoznje((prev) =>
-        prev.map((v) => v.id_voznja === voznja.id_voznja ? { ...v, placano: !v.placano } : v)
-      );
-    } catch (err) {
-      console.error("Napaka pri posodobitvi plačano:", err);
-    } finally {
-      setPlacanoLoading(null);
-    }
-  };
 
   const handleExportMonthlyReport = async () => {
     if (selectedExportVozniki.length === 0) { alert("Izberi vsaj enega voznika"); return; }
@@ -360,21 +346,6 @@ export default function Voznje() {
                         <td className="px-6 py-4 text-sm text-gray-700">{v.relacija || "-"}</td>
                         <td className="px-6 py-4 text-sm text-gray-700">{strankaLabel(v)}</td>
                         <td className="px-6 py-4 text-sm text-gray-700 max-w-xs truncate">{v.opis || "-"}</td>
-                        <td className="px-6 py-4">
-                          <button
-                            onClick={() => togglePlacano(v)}
-                            disabled={placanoLoading === v.id_voznja}
-                            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50 ${
-                              v.placano
-                                ? "bg-green-50 border border-green-300 text-green-700 hover:bg-green-100"
-                                : "bg-gray-50 border border-gray-300 text-gray-500 hover:bg-gray-100"
-                            }`}>
-                            <span className="material-symbols-outlined text-[14px]">
-                              {v.placano ? "check_circle" : "radio_button_unchecked"}
-                            </span>
-                            {v.placano ? "Plačano" : "Neplačano"}
-                          </button>
-                        </td>
                       </tr>
                     ))}
                   </tbody>

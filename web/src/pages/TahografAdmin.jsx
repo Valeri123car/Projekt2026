@@ -29,12 +29,21 @@ function formatDT(str) {
   return d.toLocaleDateString("sl-SI") + " " + d.toLocaleTimeString("sl-SI", { hour: "2-digit", minute: "2-digit" });
 }
 
-function formatTrajanje(min) {
-  if (!min && min !== 0) return "-";
-  const h = Math.floor(min / 60);
-  const m = min % 60;
-  if (h === 0) return `${m}min`;
-  return `${h}h ${m}min`;
+function formatTrajanje(zacetek, konec, trajanje_min) {
+  let totalSec;
+  if (zacetek && konec) {
+    totalSec = Math.round((new Date(konec) - new Date(zacetek)) / 1000);
+  } else if (trajanje_min != null) {
+    totalSec = trajanje_min * 60;
+  } else {
+    return "-";
+  }
+  if (totalSec < 0) return "-";
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  if (h === 0) return `${m}min ${s}s`;
+  return `${h}h ${m}min ${s}s`;
 }
 
 // ── Filter funkcija izvlečena iz .filter callback ─────────────────────────────
@@ -466,7 +475,7 @@ export default function TahografAdmin() {
                   <td className="px-4 py-3"><StanjeBadge stanje={z.stanje} /></td>
                   <td className="px-4 py-3 text-gray-700">{formatDT(z.zacetek)}</td>
                   <td className="px-4 py-3 text-gray-700">{formatDT(z.konec)}</td>
-                  <td className="px-4 py-3 text-gray-700">{formatTrajanje(z.trajanje_min)}</td>
+                  <td className="px-4 py-3 text-gray-700">{formatTrajanje(z.zacetek, z.konec, z.trajanje_min)}</td>
                   <td className="px-4 py-3 text-gray-700">{z.registrska || "-"}</td>
                   <td className="px-4 py-3 text-gray-700">{z.posadka ? "Da" : "Ne"}</td>
                   <td className="px-4 py-3">

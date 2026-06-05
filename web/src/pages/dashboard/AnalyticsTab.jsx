@@ -161,9 +161,8 @@ function ComplianceTable({ compliance }) {
 export default function AnalyticsTab() {
   const [period, setPeriod]                     = useState(() => new Date().toISOString().slice(0, 7));
   const [tahData, setTahData]                   = useState([]);
-  const [urnikData, setUrnikData]               = useState([]);
-  const [voznikiList, setVoznikiList]           = useState([]);
   const [voznjeAll, setVoznjeAll]               = useState([]);
+  const [voznikiList, setVoznikiList]           = useState([]);
   const [loading, setLoading]                   = useState(false);
   const [selectedVoznikStanje, setSelectedVoznikStanje] = useState('');
 
@@ -176,19 +175,17 @@ export default function AnalyticsTab() {
         const lastDay  = new Date(yr, mo, 0).getDate();
         const doDate   = `${period}-${String(lastDay).padStart(2, '0')}`;
 
-        const [tahRes, urnikRes, voznikiRes, voznjeRes] = await Promise.all([
+        const [tahRes, voznjeRes, voznikiRes] = await Promise.all([
           api.get(`/admin/tahograf?od=${od}&do=${doDate}`),
-          api.get('/admin/urnik'),
-          api.get('/admin/vozniki'),
           api.get('/admin/voznje'),
+          api.get('/admin/vozniki'),
         ]);
 
         setTahData(tahRes.data       || []);
-        setUrnikData(urnikRes.data   || []);
-        setVoznikiList(voznikiRes.data || []);
         setVoznjeAll(voznjeRes.data  || []);
+        setVoznikiList(voznikiRes.data || []);
       } catch {
-        setTahData([]); setUrnikData([]); setVoznikiList([]); setVoznjeAll([]);
+        setTahData([]); setVoznjeAll([]); setVoznikiList([]);
       } finally {
         setLoading(false);
       }
@@ -200,11 +197,11 @@ export default function AnalyticsTab() {
   const lastDay  = new Date(yr, mo, 0).getDate();
 
   const urnikMesec = useMemo(() =>
-    urnikData.filter((u) => {
+    voznjeAll.filter((u) => {
       const d = new Date(u.datum);
       return d.getFullYear() === yr && d.getMonth() + 1 === mo;
     }),
-    [urnikData, yr, mo]);
+    [voznjeAll, yr, mo]);
 
   const kpi = useMemo(() => {
     const voznjaMin  = tahData.filter((z) => z.stanje === 'VOZNJA').reduce((s, z) => s + (z.trajanje_min ?? 0), 0);
@@ -354,7 +351,7 @@ export default function AnalyticsTab() {
 
   const monthlyRevenueTrend = useMemo(() => {
     const map = {};
-    urnikData.filter((u) => u.cena != null).forEach((u) => {
+    voznjeAll.filter((u) => u.cena != null).forEach((u) => {
       const key = new Date(u.datum).toISOString().slice(0, 7);
       if (!map[key]) map[key] = { skupaj: 0, placano: 0 };
       map[key].skupaj += u.cena;
@@ -368,7 +365,7 @@ export default function AnalyticsTab() {
         value:  Math.round(x.skupaj * 100) / 100,
         value2: Math.round(x.placano * 100) / 100,
       }));
-  }, [urnikData]);
+  }, [voznjeAll]);
 
   if (loading) {
     return (
