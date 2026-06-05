@@ -103,6 +103,22 @@ function useOverlapCheck(datum, uraZacetek, uraKonec, isEdit, prevozId) {
   return { zasedeniVozniki, zasedeniVozila };
 }
 
+function getSelectionColorClass(selected, zaseden) {
+  if (selected && zaseden) return 'border-orange-400 bg-orange-50 text-orange-900';
+  if (selected)            return 'border-blue-500 bg-blue-50 text-blue-800';
+  if (zaseden)             return 'border-yellow-300 bg-yellow-50 hover:border-yellow-400';
+  return 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40';
+}
+
+function ZasedenBadge({ selected }) {
+  return (
+    <span className={`ml-2 inline-flex items-center gap-0.5 text-[10px] font-bold ${selected ? 'text-orange-500' : 'text-yellow-600'}`}>
+      <span className="material-symbols-outlined text-[12px]">warning</span>
+      ZASEDEN
+    </span>
+  );
+}
+
 function SelectionGrid({ items, selectedId, zasedeni, onSelect, deselectable, renderItem }) {
   return (
     <div className="grid grid-cols-2 gap-1.5 max-h-44 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50 p-2">
@@ -110,25 +126,41 @@ function SelectionGrid({ items, selectedId, zasedeni, onSelect, deselectable, re
         const id       = String(item.id);
         const zaseden  = zasedeni.includes(item.rawId);
         const selected = selectedId === id;
-        const colorClass = selected && zaseden
-          ? 'border-orange-400 bg-orange-50 text-orange-900'
-          : selected
-          ? 'border-blue-500 bg-blue-50 text-blue-800'
-          : zaseden
-          ? 'border-yellow-300 bg-yellow-50 hover:border-yellow-400'
-          : 'border-slate-200 bg-white hover:border-blue-300 hover:bg-blue-50/40';
         return (
           <button
             key={id}
             type="button"
             onClick={() => onSelect(deselectable && selected ? '' : id)}
-            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors ${colorClass}`}
+            className={`flex items-center justify-between rounded-lg border px-3 py-2 text-left text-sm transition-colors ${getSelectionColorClass(selected, zaseden)}`}
           >
             {renderItem(item, selected, zaseden)}
           </button>
         );
       })}
     </div>
+  );
+}
+
+function VoznikItem({ item, selected, zaseden }) {
+  return (
+    <>
+      <span className="font-medium">{item.ime} {item.priimek}</span>
+      {zaseden && <ZasedenBadge selected={selected} />}
+      {!zaseden && selected && <span className="material-symbols-outlined text-[16px] text-blue-600">check_circle</span>}
+    </>
+  );
+}
+
+function VoziloItem({ item, selected, zaseden }) {
+  return (
+    <>
+      <div>
+        <p className="font-medium">{item.registerska}</p>
+        {item.tip && <p className="text-[11px] text-slate-500">{item.tip}</p>}
+      </div>
+      {zaseden && <ZasedenBadge selected={selected} />}
+      {!zaseden && selected && <span className="material-symbols-outlined text-[16px] text-blue-600">check_circle</span>}
+    </>
   );
 }
 
@@ -243,7 +275,6 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
     setError(null);
     const validationError = validatePrevoz(datum, selectedVoznik);
     if (validationError) return setError(validationError);
-
     try {
       setSaving(true);
       const body = buildPrevozPayload({ datum, uraZacetek, uraKonec, relacija, opis, cena, placano, selectedVozilo, selectedStranka, selectedVoznik });
@@ -261,32 +292,30 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
   };
 
   const voznikiItems = voznikiList.map((v) => ({
-    id:    v.id_uporabnik,
-    rawId: v.id_uporabnik,
-    ime:   v.ime,
+    id:      v.id_uporabnik,
+    rawId:   v.id_uporabnik,
+    ime:     v.ime,
     priimek: v.priimek,
   }));
 
   const vozilaItems = vozilaList.map((v) => ({
-    id:         v.id_vozilo,
-    rawId:      v.id_vozilo,
+    id:          v.id_vozilo,
+    rawId:       v.id_vozilo,
     registerska: v.registerska,
-    tip:        v.tip_vozila?.naziv,
+    tip:         v.tip_vozila?.naziv,
   }));
 
   const submitLabel = isEdit ? 'Shrani spremembe' : 'Dodaj prevoz';
+  const modalIcon   = isEdit ? 'edit_calendar' : 'add_road';
+  const modalTitle  = isEdit ? 'Uredi prevoz' : 'Nov prevoz';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
       <div className="w-full max-w-2xl rounded-2xl bg-white shadow-2xl flex flex-col max-h-[90vh]">
         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4 sticky top-0 bg-white rounded-t-2xl z-10">
           <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined rounded-lg bg-blue-50 p-2 text-blue-600">
-              {isEdit ? 'edit_calendar' : 'add_road'}
-            </span>
-            <h2 className="text-base font-semibold text-slate-900">
-              {isEdit ? 'Uredi prevoz' : 'Nov prevoz'}
-            </h2>
+            <span className="material-symbols-outlined rounded-lg bg-blue-50 p-2 text-blue-600">{modalIcon}</span>
+            <h2 className="text-base font-semibold text-slate-900">{modalTitle}</h2>
           </div>
           <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
             <span className="material-symbols-outlined text-[20px]">close</span>
@@ -322,18 +351,7 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
               zasedeni={zasedeniVozniki}
               onSelect={setSelectedVoznik}
               deselectable={false}
-              renderItem={(item, selected, zaseden) => (
-                <>
-                  <span className="font-medium">{item.ime} {item.priimek}</span>
-                  {zaseden && (
-                    <span className={`ml-2 inline-flex items-center gap-0.5 text-[10px] font-bold ${selected ? 'text-orange-500' : 'text-yellow-600'}`}>
-                      <span className="material-symbols-outlined text-[12px]">warning</span>
-                      ZASEDEN
-                    </span>
-                  )}
-                  {!zaseden && selected && <span className="material-symbols-outlined text-[16px] text-blue-600">check_circle</span>}
-                </>
-              )}
+              renderItem={(item, selected, zaseden) => <VoznikItem item={item} selected={selected} zaseden={zaseden} />}
             />
           </div>
 
@@ -345,21 +363,7 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
               zasedeni={zasedeniVozila}
               onSelect={setSelectedVozilo}
               deselectable={true}
-              renderItem={(item, selected, zaseden) => (
-                <>
-                  <div>
-                    <p className="font-medium">{item.registerska}</p>
-                    {item.tip && <p className="text-[11px] text-slate-500">{item.tip}</p>}
-                  </div>
-                  {zaseden && (
-                    <span className={`ml-2 inline-flex items-center gap-0.5 text-[10px] font-bold ${selected ? 'text-orange-500' : 'text-yellow-600'}`}>
-                      <span className="material-symbols-outlined text-[12px]">warning</span>
-                      ZASEDEN
-                    </span>
-                  )}
-                  {!zaseden && selected && <span className="material-symbols-outlined text-[16px] text-blue-600">check_circle</span>}
-                </>
-              )}
+              renderItem={(item, selected, zaseden) => <VoziloItem item={item} selected={selected} zaseden={zaseden} />}
             />
           </div>
 
