@@ -16,7 +16,6 @@ model Uporabnik {
   email           String          @unique @db.VarChar(100)
   geslo           String          @db.VarChar(255)
   voznje          Voznja[]
-  urniki          Urnik[]
   gdpr_soglasje   Boolean         @default(false)
   gdpr_datum      DateTime?
   tahograf_zapisi TahografZapis[]
@@ -29,17 +28,21 @@ model Voznja {
   zacetek         DateTime
   konc            DateTime
   fk_uporabnik    Int
-  fk_urnik        Int?
+  fk_vozilo       Int?
+  fk_stranka      Int?
   timestamp_zapis DateTime?
-  stranka         String?   @db.VarChar(100)
+  stranka_ime     String?   @db.VarChar(100)
   relacija        String?   @db.VarChar(255)
   opis            String?   @db.VarChar(500)
+  cena            Float?
   placano         Boolean   @default(false)
   uporabnik       Uporabnik @relation(fields: [fk_uporabnik], references: [id_uporabnik])
-  urnik           Urnik?    @relation(fields: [fk_urnik], references: [id_urnik])
+  vozilo          Vozilo?   @relation(fields: [fk_vozilo], references: [id_vozilo])
+  stranka         Stranka?  @relation(fields: [fk_stranka], references: [id_stranka])
 
   @@index([fk_uporabnik])
-  @@index([fk_urnik])
+  @@index([fk_vozilo])
+  @@index([fk_stranka])
 }
 
 model TipVozila {
@@ -57,37 +60,18 @@ model Vozilo {
   dolzina       Int?
   fk_tip_vozila Int
   tip_vozila    TipVozila @relation(fields: [fk_tip_vozila], references: [id_tip_vozila])
-  urniki        Urnik[]
+  voznje        Voznja[]
 
   @@index([fk_tip_vozila])
 }
 
 model Stranka {
-  id_stranka Int     @id @default(autoincrement())
-  naziv      String  @db.VarChar(45)
-  email      String? @db.VarChar(45)
-  telefonska String? @db.VarChar(45)
+  id_stranka Int      @id @default(autoincrement())
+  naziv      String   @db.VarChar(45)
+  email      String?  @db.VarChar(45)
+  telefonska String?  @db.VarChar(45)
   davcna_st  Int?
-  urniki     Urnik[]
-}
-
-model Urnik {
-  id_urnik     Int       @id @default(autoincrement())
-  datum        DateTime  @db.Date
-  cena         Float?
-  naziv        String?   @db.VarChar(45)
-  placano      Boolean   @default(false)
-  fk_vozilo    Int
-  fk_uporabnik Int
-  fk_stranka   Int
-  vozilo       Vozilo    @relation(fields: [fk_vozilo], references: [id_vozilo])
-  uporabnik    Uporabnik @relation(fields: [fk_uporabnik], references: [id_uporabnik])
-  stranka      Stranka   @relation(fields: [fk_stranka], references: [id_stranka])
-  voznje       Voznja[]
-
-  @@index([fk_vozilo])
-  @@index([fk_uporabnik])
-  @@index([fk_stranka])
+  voznje     Voznja[]
 }
 
 model LOG_voznja {
