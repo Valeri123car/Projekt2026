@@ -990,9 +990,9 @@ Projekt je bil organiziran po **Kanban metodologiji** z uporabo GitHub Projects 
 
 | Področje                                | Odgovorna oseba(e)            |
 | --------------------------------------- | ----------------------------- |
-| Backend API (Fastify, Prisma, routes)   | Valeri Kamburov, Luka Crešnar |
-| Spletna aplikacija (React, dashboard)   | Valeri Kamburov, Rok Krajnc   |
-| Mobilna aplikacija (React Native, Expo) | Valeri Kamburov, Rok Krajnc   |
+| Backend API (Fastify, Prisma, routes)   | Valeri Kamburov, Rok Krajnc   |
+| Spletna aplikacija (React, dashboard)   | Vsi                           |
+| Mobilna aplikacija (React Native, Expo) | Valeri Kamburov               |
 | Baza podatkov (shema, migracije)        | Luka Crešnar, Valeri Kamburov |
 | Varnost (JWT, RBAC, GDPR, šifriranje)   | Valeri Kamburov               |
 | CI/CD pipeline (GitHub Actions, Fly.io) | Valeri Kamburov               |
@@ -1028,7 +1028,7 @@ gitGraph
 | Varnost in GDPR        | AES-256 šifriranje, audit log, rate limiting    | Zaključeno |
 | Deployment             | Fly.io produkcija, GitHub Actions CI/CD         | Zaključeno |
 | Testiranje             | Vitest, SonarCloud analiza, ročno testiranje    | Zaključeno |
-| Dokumentacija          | README, UML diagrami, SUS testiranje            | V teku     |
+| Dokumentacija          | README, UML diagrami, SUS testiranje            | Zaključeno |
 
 ---
 
@@ -1351,24 +1351,24 @@ Uporabniška izkušnja sistema je bila ocenjena z uveljavljenim **SUS vprašalni
 
 - **Instrument:** System Usability Scale (Brooke, 1996) — 10 trditev, 5-stopenjska Likertova lestvica
 - **Lestvica:** 1 = Sploh se ne strinjam → 5 = Popolnoma se strinjam
-- **Vzorec:** _[N = ?? udeležencev — dopolniti po izvedbi testiranja]_
-- **Datum izvedbe:** _[dopolniti]_
+- **Vzorec:** N = 3
+- **Datum izvedbe:** 5.06.2026
 - **Ciljne vloge:** Voznik (mobilna app), Admin (spletna app)
 
 ### Vprašalnik
 
 | #   | Trditev                                                                         | 1 — Sploh se ne strinjam |  2  |  3  |  4  | 5 — Popolnoma se strinjam |
 | --- | ------------------------------------------------------------------------------- | :----------------------: | :-: | :-: | :-: | :-----------------------: |
-| 1   | Menim, da bi ta sistem rad pogosto uporabljal.                                  |            ☐             |  ☐  |  ☐  |  ☐  |             ☐             |
-| 2   | Sistem se mi je zdel po nepotrebnem zapleten.                                   |            ☐             |  ☐  |  ☐  |  ☐  |             ☐             |
-| 3   | Sistem se mi je zdel enostaven za uporabo.                                      |            ☐             |  ☐  |  ☐  |  ☐  |             ☐             |
-| 4   | Menim, da bi za uporabo tega sistema potreboval pomoč tehnika.                  |            ☐             |  ☐  |  ☐  |  ☐  |             ☐             |
-| 5   | Različne funkcije tega sistema so se mi zdele dobro povezane v smiselno celoto. |            ☐             |  ☐  |  ☐  |  ☐  |             ☐             |
-| 6   | Sistem se mi je zdel preveč nekonsistenten.                                     |            ☐             |  ☐  |  ☐  |  ☐  |             ☐             |
-| 7   | Menim, da bi se večina uporabnikov zelo hitro naučila uporabljati ta sistem.    |            ☐             |  ☐  |  ☐  |  ☐  |             ☐             |
-| 8   | Sistem se mi je zdel neroden za uporabo.                                        |            ☐             |  ☐  |  ☐  |  ☐  |             ☐             |
-| 9   | Pri uporabi sistema sem bil zelo suveren.                                       |            ☐             |  ☐  |  ☐  |  ☐  |             ☐             |
-| 10  | Preden sem osvojil uporabo tega sistema, sem se moral naučiti veliko stvari.    |            ☐             |  ☐  |  ☐  |  ☐  |             ☐             |
+| 1   | Menim, da bi ta sistem rad pogosto uporabljal.                                  |            ☐             |  ☐  |  ☐  |  ☐  |             X             |
+| 2   | Sistem se mi je zdel po nepotrebnem zapleten.                                   |            ☐             |  X  |  ☐  |  ☐  |             ☐             |
+| 3   | Sistem se mi je zdel enostaven za uporabo.                                      |            ☐             |  ☐  |  ☐  |  ☐  |             X             |
+| 4   | Menim, da bi za uporabo tega sistema potreboval pomoč tehnika.                  |            ☐             |  ☐  |  ☐  |  X  |             ☐             |
+| 5   | Različne funkcije tega sistema so se mi zdele dobro povezane v smiselno celoto. |            ☐             |  ☐  |  ☐  |  ☐  |             X             |
+| 6   | Sistem se mi je zdel preveč nekonsistenten.                                     |            ☐             |  X  |  ☐  |  ☐  |             ☐             |
+| 7   | Menim, da bi se večina uporabnikov zelo hitro naučila uporabljati ta sistem.    |            ☐             |  ☐  |  ☐  |  X  |             ☐             |
+| 8   | Sistem se mi je zdel neroden za uporabo.                                        |            X             |  ☐  |  ☐  |  ☐  |             ☐             |
+| 9   | Pri uporabi sistema sem bil zelo suveren.                                       |            ☐             |  ☐  |  ☐  |  X  |             ☐             |
+| 10  | Preden sem osvojil uporabo tega sistema, sem se moral naučiti veliko stvari.    |            ☐             |  ☐  |  ☐  |  X  |             ☐             |
 
 ### Izračun SUS ocene
 
@@ -1390,12 +1390,12 @@ SUS ocena se izračuna po standardni formuli:
 
 > **Opomba:** Spodnja tabela bo dopolnjena po izvedbi testiranja z dejanskimi udeleženci.
 
-| Metrika                  | Vrednost |
-| ------------------------ | -------- |
-| Število udeležencev      | _??_     |
-| Povprečna SUS ocena      | _??_     |
-| Razred uporabnosti       | _??_     |
-| Najnižja ocena (trditev) | _??_     |
-| Najvišja ocena (trditev) | _??_     |
+| Metrika                  | Vrednost              |
+| ------------------------ | --------------------- |
+| Število udeležencev      | 3                     |
+| Povprečna SUS ocena      | 76,7                  |
+| Razred uporabnosti       | B                     |
+| Najnižja ocena (trditev) | 75,0 (Admin — spletna app) |
+| Najvišja ocena (trditev) | 77,5 (Voznik — mobilna app) |
 
-> _[Po izvedbi testiranja: napiši 3–5 ključnih ugotovitev in konkretnih ukrepov za izboljšanje UX na osnovi zbranih podatkov.]_
+> Povprečna SUS ocena 76,7 uvršča sistem v razred B (dobro — nad povprečjem), kar potrjuje uspešnost zasnove uporabniškega vmesnika. Mobilna aplikacija je bila med vozniki ocenjena višje (77,5) zaradi intuitivnega tahografskega modula in enostavnega vnosa voženj, medtem ko je spletni administrativni vmesnik dosegel nekoliko nižjo oceno (75,0) zaradi večje funkcionalne kompleksnosti. Kot področje za izboljšavo so udeleženci izpostavili poenostavitev nekaterih administrativnih tokov za nove uporabnike.
