@@ -49,10 +49,11 @@ export default function Racuni() {
   const togglePlacano = async (item) => {
     try {
       setTogglingId(item.id_urnik);
-      await api.patch(`/admin/urnik/${item.id_urnik}/placano`, { placano: !item.placano });
+      await api.put(`/admin/urnik/${item.id_urnik}`, { placano: !item.placano });
       setUrnik((prev) => prev.map((u) => u.id_urnik === item.id_urnik ? { ...u, placano: !u.placano } : u));
-    } catch {
-      setError('Napaka pri posodabljanju statusa plačila.');
+    } catch (e) {
+      const msg = e.response?.data?.error || e.response?.data?.message || e.message || 'Napaka pri posodabljanju statusa plačila.';
+      setError(`Napaka pri posodabljanju statusa plačila: ${msg}`);
     } finally {
       setTogglingId(null);
     }

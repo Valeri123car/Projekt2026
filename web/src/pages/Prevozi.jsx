@@ -591,6 +591,7 @@ export default function Prevozi() {
   const [sortDir, setSortDir]             = useState('desc');
   const [modal, setModal]                 = useState(null);
   const [togglingId, setTogglingId]       = useState(null);
+  const [confirmItem, setConfirmItem]     = useState(null);
 
   const fetchUrnik = async () => {
     try {
@@ -611,7 +612,7 @@ export default function Prevozi() {
   const togglePlacano = async (prevoz) => {
     try {
       setTogglingId(prevoz.id_urnik);
-      await api.patch(`/admin/urnik/${prevoz.id_urnik}/placano`, { placano: !prevoz.placano });
+      await api.put(`/admin/urnik/${prevoz.id_urnik}`, { placano: !prevoz.placano });
       setUrnik((prev) => prev.map((u) => u.id_urnik === prevoz.id_urnik ? { ...u, placano: !u.placano } : u));
     } catch {
       setError('Napaka pri posodabljanju statusa plačila');
@@ -786,7 +787,7 @@ export default function Prevozi() {
                       <td className="px-4 py-4 text-slate-600 text-sm max-w-[160px] truncate">{u.naziv || '-'}</td>
                       <td className="px-4 py-4 font-semibold text-slate-800">{formatCena(u.cena)}</td>
                       <td className="px-4 py-4">
-                        <button type="button" onClick={() => togglePlacano(u)} disabled={togglingId === u.id_urnik}
+                        <button type="button" onClick={() => setConfirmItem(u)} disabled={togglingId === u.id_urnik}
                           className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[11px] font-semibold border transition-colors disabled:opacity-60 ${
                             u.placano
                               ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100'
@@ -838,6 +839,37 @@ export default function Prevozi() {
           </section>
         )}
       </main>
+
+      {confirmItem && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40">
+          <div className="w-full max-w-sm rounded-xl bg-white p-6 shadow-xl">
+            <h2 className="mb-2 text-base font-semibold text-slate-800">Potrditev spremembe</h2>
+            <p className="mb-5 text-sm text-slate-600">
+              Ali res želite spremeniti status plačila na{' '}
+              <span className={`font-semibold ${confirmItem.placano ? 'text-red-600' : 'text-emerald-700'}`}>
+                {confirmItem.placano ? 'Neplačano' : 'Plačano'}
+              </span>
+              ?
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                type="button"
+                onClick={() => setConfirmItem(null)}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+              >
+                Prekliči
+              </button>
+              <button
+                type="button"
+                onClick={() => { togglePlacano(confirmItem); setConfirmItem(null); }}
+                className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+              >
+                Potrdi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
