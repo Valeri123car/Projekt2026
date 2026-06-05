@@ -17,7 +17,7 @@ export default async function admin(app) {
     "/vozniki",
     {
       onRequest: [app.authenticate, managementOk],
-      schema: { description: "Vrni vse voznike (samo admin)" },
+      schema: { description: "Vrni vse voznike" },
     },
     async () => {
       return app.prisma.uporabnik.findMany({
@@ -39,19 +39,21 @@ export default async function admin(app) {
     {
       onRequest: [app.authenticate, managementOk],
       schema: {
-        description: "Vrni vse vožnje vseh voznikov (samo admin)",
+        description: "Vrni vse vožnje vseh voznikov",
         querystring: {
           type: "object",
           properties: {
             fk_uporabnik: { type: "integer" },
             od: { type: "string", format: "date" },
             do: { type: "string", format: "date" },
+            pretekle: { type: "boolean" },
+            prihodnje: { type: "boolean" },
           },
         },
       },
     },
     async (request) => {
-      const { fk_uporabnik, od, do: do_ } = request.query;
+      const { fk_uporabnik, od, do: do_, pretekle, prihodnje } = request.query;
 
       const where = {};
       if (fk_uporabnik) where.fk_uporabnik = fk_uporabnik;
@@ -60,18 +62,19 @@ export default async function admin(app) {
         if (od) where.datum.gte = new Date(od);
         if (do_) where.datum.lte = new Date(do_);
       }
+      if (pretekle) {
+        where.datum = { ...where.datum, lt: new Date() };
+      }
+      if (prihodnje) {
+        where.datum = { ...where.datum, gte: new Date() };
+      }
 
       return app.prisma.voznja.findMany({
         where,
         include: {
           uporabnik: { select: { ime: true, priimek: true } },
-          urnik: {
-            select: {
-              id_urnik: true,
-              naziv: true,
-              datum: true,
-            },
-          },
+          vozilo: { include: { tip_vozila: true } },
+          stranka: true,
         },
         orderBy: { datum: "desc" },
       });
@@ -83,7 +86,7 @@ export default async function admin(app) {
     {
       onRequest: [app.authenticate, adminOnly],
       schema: {
-        description: "Vrni vse vožnje specifičnega voznika (samo admin)",
+        description: "Vrni vse vožnje specifičnega voznika",
         params: {
           type: "object",
           properties: { driverId: { type: "integer" } },
@@ -113,33 +116,177 @@ export default async function admin(app) {
         where,
         include: {
           uporabnik: { select: { ime: true, priimek: true } },
-          urnik: {
-            select: {
-              id_urnik: true,
-              naziv: true,
-              datum: true,
-            },
-          },
+          vozilo: { include: { tip_vozila: true } },
+          stranka: true,
         },
         orderBy: { datum: "desc" },
       });
     },
   );
-
-  app.get(
-    "/urnik",
+  app.post(
+    "/voznje/nova",
     {
       onRequest: [app.authenticate, managementOk],
-      schema: { description: "Vrni celoten urnik vseh voznikov (samo admin)" },
+      schema: {
+        description: "Admin ustvari novo vožnjo",
+        body: {
+          type: "object",
+          required: ["datum", "zacetek", "konc", "fk_uporabnik"],
+          properties: {
+            datum: { type: "string", format: "date" },
+            zacetek: { type: "string" },
+            konc: { type: "string" },
+            stranka_ime: { type: "string" },
+            relacija: { type: "string" },
+            opis: { type: "string" },
+            cena: { type: "number" },
+            placano: { type: "boolean" },
+            fk_vozilo: { type: "integer" },
+            fk_stranka: { type: "integer" },
+            fk_uporabnik: { type: "integer" },
+          },
+        },
+      },
     },
-    async () => {
-      return app.prisma.urnik.findMany({
+    async (request, reply) => {
+      const {
+        datum,
+        zacetek,
+        konc,
+        stranka_ime,
+        relacija,
+        opis,
+        cena,
+        placano,
+        fk_vozilo,
+        fk_stranka,
+        fk_uporabnik,
+      } = request.body;
+
+      const voznja = await app.prisma.voznja.create({
+        data: {
+          datum: new Date(datum),
+          zacetek: new Date(zacetek),
+          konc: new Date(konc),
+          fk_uporabnik,
+          stranka_ime: stranka_ime || null,
+          relacija: relacija || null,
+          opis: opis || null,
+          cena: cena ?? null,
+          placano: placano ?? false,
+          fk_vozilo: fk_vozilo || null,
+          fk_stranka: fk_stranka || null,
+          timestamp_zapis: new Date(),
+        },
         include: {
           uporabnik: { select: { ime: true, priimek: true } },
+          vozilo: { include: { tip_vozila: true } },
           stranka: true,
-          vozilo: true,
         },
-        orderBy: { datum: "asc" },
+      });
+
+      return reply.code(201).send(voznja);
+    },
+  );
+  app.put(
+    "/voznje/:id",
+    {
+      onRequest: [app.authenticate, managementOk],
+      schema: {
+        description: "Posodobi vožnjo (admin)",
+        params: {
+          type: "object",
+          properties: { id: { type: "integer" } },
+          required: ["id"],
+        },
+        body: {
+          type: "object",
+          properties: {
+            datum: { type: "string" },
+            zacetek: { type: "string" },
+            konc: { type: "string" },
+            stranka_ime: { type: "string" },
+            relacija: { type: "string" },
+            opis: { type: "string" },
+            cena: { type: "number" },
+            placano: { type: "boolean" },
+            fk_vozilo: { type: "integer" },
+            fk_stranka: { type: "integer" },
+          },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      const obstaja = await app.prisma.voznja.findUnique({
+        where: { id_voznja: parseInt(id) },
+      });
+      if (!obstaja) return reply.code(404).send({ error: "Vožnja ne obstaja" });
+
+      const {
+        datum,
+        zacetek,
+        konc,
+        stranka_ime,
+        relacija,
+        opis,
+        cena,
+        placano,
+        fk_vozilo,
+        fk_stranka,
+      } = request.body;
+      const data = {};
+      if (datum !== undefined) data.datum = new Date(datum);
+      if (zacetek !== undefined) data.zacetek = new Date(zacetek);
+      if (konc !== undefined) data.konc = new Date(konc);
+      if (stranka_ime !== undefined) data.stranka_ime = stranka_ime || null;
+      if (relacija !== undefined) data.relacija = relacija || null;
+      if (opis !== undefined) data.opis = opis || null;
+      if (cena !== undefined) data.cena = cena;
+      if (placano !== undefined) data.placano = placano;
+      if (fk_vozilo !== undefined) data.fk_vozilo = fk_vozilo;
+      if (fk_stranka !== undefined) data.fk_stranka = fk_stranka;
+
+      return app.prisma.voznja.update({
+        where: { id_voznja: parseInt(id) },
+        data,
+        include: {
+          uporabnik: { select: { ime: true, priimek: true } },
+          vozilo: { include: { tip_vozila: true } },
+          stranka: true,
+        },
+      });
+    },
+  );
+
+  app.patch(
+    "/voznje/:id/placano",
+    {
+      onRequest: [app.authenticate, managementOk],
+      schema: {
+        params: {
+          type: "object",
+          properties: { id: { type: "integer" } },
+          required: ["id"],
+        },
+        body: {
+          type: "object",
+          required: ["placano"],
+          properties: { placano: { type: "boolean" } },
+        },
+      },
+    },
+    async (request, reply) => {
+      const { id } = request.params;
+      const { placano } = request.body;
+      const obstaja = await app.prisma.voznja.findUnique({
+        where: { id_voznja: parseInt(id) },
+      });
+      if (!obstaja) return reply.code(404).send({ error: "Vožnja ne obstaja" });
+      return app.prisma.voznja.update({
+        where: { id_voznja: parseInt(id) },
+        data: { placano },
+        select: { id_voznja: true, placano: true },
       });
     },
   );
@@ -149,7 +296,7 @@ export default async function admin(app) {
     {
       onRequest: [app.authenticate, managementOk],
       schema: {
-        description: "Vrni vse tahografske zapise vseh voznikov (samo admin)",
+        description: "Vrni vse tahografske zapise vseh voznikov",
         querystring: {
           type: "object",
           properties: {
@@ -184,7 +331,7 @@ export default async function admin(app) {
     {
       onRequest: [app.authenticate, adminOnly],
       schema: {
-        description: "Ustvari novega uporabnika z določeno vlogo (samo admin)",
+        description: "Ustvari novega uporabnika",
         body: {
           type: "object",
           required: ["ime", "priimek", "email", "geslo", "dostop"],
@@ -206,12 +353,9 @@ export default async function admin(app) {
       const obstaja = await app.prisma.uporabnik.findUnique({
         where: { email },
       });
-      if (obstaja) {
-        return reply.code(409).send({ error: "Email že obstaja" });
-      }
+      if (obstaja) return reply.code(409).send({ error: "Email že obstaja" });
 
       const hash = await bcrypt.default.hash(geslo, 12);
-
       const nov = await app.prisma.uporabnik.create({
         data: {
           ime,
@@ -223,11 +367,9 @@ export default async function admin(app) {
         },
       });
 
-      return reply.code(201).send({
-        id: nov.id_uporabnik,
-        email: nov.email,
-        dostop: nov.dostop,
-      });
+      return reply
+        .code(201)
+        .send({ id: nov.id_uporabnik, email: nov.email, dostop: nov.dostop });
     },
   );
 
@@ -235,7 +377,7 @@ export default async function admin(app) {
     "/uporabniki",
     {
       onRequest: [app.authenticate, adminOnly],
-      schema: { description: "Vrni vse uporabnike (samo admin)" },
+      schema: { description: "Vrni vse uporabnike" },
     },
     async () => {
       return app.prisma.uporabnik.findMany({
@@ -247,7 +389,6 @@ export default async function admin(app) {
           dostop: true,
           gdpr_soglasje: true,
           gdpr_datum: true,
-          fk_postavka: true,
         },
         orderBy: { priimek: "asc" },
       });
@@ -259,7 +400,7 @@ export default async function admin(app) {
     {
       onRequest: [app.authenticate, adminOnly],
       schema: {
-        description: "Posodobi podatke uporabnika (samo admin)",
+        description: "Posodobi podatke uporabnika",
         params: {
           type: "object",
           properties: { id: { type: "integer" } },
@@ -287,17 +428,15 @@ export default async function admin(app) {
       const obstaja = await app.prisma.uporabnik.findUnique({
         where: { id_uporabnik: parseInt(id) },
       });
-      if (!obstaja) {
+      if (!obstaja)
         return reply.code(404).send({ error: "Uporabnik ne obstaja" });
-      }
 
       if (email && email !== obstaja.email) {
         const emailObstaja = await app.prisma.uporabnik.findUnique({
           where: { email },
         });
-        if (emailObstaja) {
+        if (emailObstaja)
           return reply.code(409).send({ error: "Email že obstaja" });
-        }
       }
 
       const data = {};
@@ -307,13 +446,9 @@ export default async function admin(app) {
       if (dostop !== undefined) data.dostop = dostop;
       if (gdpr_soglasje !== undefined) {
         data.gdpr_soglasje = gdpr_soglasje;
-        if (gdpr_soglasje && !obstaja.gdpr_datum) {
-          data.gdpr_datum = new Date();
-        }
+        if (gdpr_soglasje && !obstaja.gdpr_datum) data.gdpr_datum = new Date();
       }
-      if (emso) {
-        data.emso_crypted = app.encrypt(emso);
-      }
+      if (emso) data.emso_crypted = app.encrypt(emso);
       if (geslo) {
         const bcrypt = await import("bcryptjs");
         data.geslo = await bcrypt.default.hash(geslo, 12);
@@ -340,7 +475,7 @@ export default async function admin(app) {
     {
       onRequest: [app.authenticate, adminOnly],
       schema: {
-        description: "Izbriši uporabnika (samo admin)",
+        description: "Izbriši uporabnika",
         params: {
           type: "object",
           properties: { id: { type: "integer" } },
@@ -360,14 +495,12 @@ export default async function admin(app) {
       const obstaja = await app.prisma.uporabnik.findUnique({
         where: { id_uporabnik: parseInt(id) },
       });
-      if (!obstaja) {
+      if (!obstaja)
         return reply.code(404).send({ error: "Uporabnik ne obstaja" });
-      }
 
       await app.prisma.uporabnik.delete({
         where: { id_uporabnik: parseInt(id) },
       });
-
       return reply.code(204).send();
     },
   );
@@ -377,7 +510,7 @@ export default async function admin(app) {
     {
       onRequest: [app.authenticate, adminOnly],
       schema: {
-        description: "Vrni audit log (samo admin)",
+        description: "Vrni audit log",
         querystring: {
           type: "object",
           properties: {
@@ -483,208 +616,6 @@ export default async function admin(app) {
         include: { tip_vozila: true },
         orderBy: { registerska: "asc" },
       });
-    },
-  );
-
-  app.get(
-    "/urnik/zasedeno",
-    {
-      onRequest: [app.authenticate, managementOk],
-      schema: {
-        querystring: {
-          type: "object",
-          required: ["datum"],
-          properties: {
-            datum: { type: "string", format: "date" },
-            exclude_id: { type: "integer" },
-          },
-        },
-      },
-    },
-    async (request) => {
-      const { datum, exclude_id } = request.query;
-
-      const dayStart = new Date(`${datum}T00:00:00.000Z`);
-      const dayEnd = new Date(`${datum}T23:59:59.999Z`);
-
-      const zasedeni = await app.prisma.urnik.findMany({
-        where: {
-          datum: { gte: dayStart, lte: dayEnd },
-          ...(exclude_id ? { id_urnik: { not: parseInt(exclude_id) } } : {}),
-        },
-        select: { fk_vozilo: true, fk_uporabnik: true },
-      });
-
-      return {
-        vozila: [...new Set(zasedeni.map((z) => z.fk_vozilo))],
-        vozniki: [...new Set(zasedeni.map((z) => z.fk_uporabnik))],
-      };
-    },
-  );
-
-  app.post(
-    "/urnik",
-    {
-      onRequest: [app.authenticate, managementOk],
-      schema: {
-        body: {
-          type: "object",
-          required: ["datum", "fk_vozilo", "fk_uporabnik", "fk_stranka"],
-          properties: {
-            datum: { type: "string" },
-            naziv: { type: "string" },
-            cena: { type: "number" },
-            placano: { type: "boolean" },
-            fk_vozilo: { type: "integer" },
-            fk_uporabnik: { type: "integer" },
-            fk_stranka: { type: "integer" },
-          },
-        },
-      },
-    },
-    async (request, reply) => {
-      const {
-        datum,
-        naziv,
-        cena,
-        placano,
-        fk_vozilo,
-        fk_uporabnik,
-        fk_stranka,
-      } = request.body;
-      const nov = await app.prisma.urnik.create({
-        data: {
-          datum: new Date(datum),
-          naziv: naziv || null,
-          cena: cena ?? null,
-          placano: placano ?? false,
-          fk_vozilo,
-          fk_uporabnik,
-          fk_stranka,
-        },
-        include: {
-          uporabnik: { select: { ime: true, priimek: true } },
-          stranka: true,
-          vozilo: { include: { tip_vozila: true } },
-        },
-      });
-      return reply.code(201).send(nov);
-    },
-  );
-
-  app.put(
-    "/urnik/:id",
-    {
-      onRequest: [app.authenticate, managementOk],
-      schema: {
-        params: {
-          type: "object",
-          properties: { id: { type: "integer" } },
-          required: ["id"],
-        },
-        body: {
-          type: "object",
-          properties: {
-            datum: { type: "string" },
-            naziv: { type: "string" },
-            cena: { type: "number" },
-            placano: { type: "boolean" },
-            fk_vozilo: { type: "integer" },
-            fk_uporabnik: { type: "integer" },
-            fk_stranka: { type: "integer" },
-          },
-        },
-      },
-    },
-    async (request, reply) => {
-      const { id } = request.params;
-      const obstaja = await app.prisma.urnik.findUnique({
-        where: { id_urnik: parseInt(id) },
-      });
-      if (!obstaja) return reply.code(404).send({ error: "Prevoz ne obstaja" });
-
-      const {
-        datum,
-        naziv,
-        cena,
-        placano,
-        fk_vozilo,
-        fk_uporabnik,
-        fk_stranka,
-      } = request.body;
-      const data = {};
-      if (datum !== undefined) data.datum = new Date(datum);
-      if (naziv !== undefined) data.naziv = naziv || null;
-      if (cena !== undefined) data.cena = cena;
-      if (placano !== undefined) data.placano = placano;
-      if (fk_vozilo !== undefined) data.fk_vozilo = fk_vozilo;
-      if (fk_uporabnik !== undefined) data.fk_uporabnik = fk_uporabnik;
-      if (fk_stranka !== undefined) data.fk_stranka = fk_stranka;
-
-      return app.prisma.urnik.update({
-        where: { id_urnik: parseInt(id) },
-        data,
-        include: {
-          uporabnik: { select: { ime: true, priimek: true } },
-          stranka: true,
-          vozilo: { include: { tip_vozila: true } },
-        },
-      });
-    },
-  );
-
-  app.patch(
-    "/urnik/:id/placano",
-    {
-      onRequest: [app.authenticate, managementOk],
-      schema: {
-        params: {
-          type: "object",
-          properties: { id: { type: "integer" } },
-          required: ["id"],
-        },
-        body: {
-          type: "object",
-          required: ["placano"],
-          properties: { placano: { type: "boolean" } },
-        },
-      },
-    },
-    async (request, reply) => {
-      const { id } = request.params;
-      const { placano } = request.body;
-      const obstaja = await app.prisma.urnik.findUnique({
-        where: { id_urnik: parseInt(id) },
-      });
-      if (!obstaja) return reply.code(404).send({ error: "Prevoz ne obstaja" });
-      return app.prisma.urnik.update({
-        where: { id_urnik: parseInt(id) },
-        data: { placano },
-        select: { id_urnik: true, placano: true },
-      });
-    },
-  );
-
-  app.delete(
-    "/urnik/:id",
-    {
-      onRequest: [app.authenticate, managementOk],
-      schema: {
-        params: {
-          type: "object",
-          properties: { id: { type: "integer" } },
-          required: ["id"],
-        },
-      },
-    },
-    async (request, reply) => {
-      const { id } = request.params;
-      const obstaja = await app.prisma.urnik.findUnique({
-        where: { id_urnik: parseInt(id) },
-      });
-      if (!obstaja) return reply.code(404).send({ error: "Prevoz ne obstaja" });
-      await app.prisma.urnik.delete({ where: { id_urnik: parseInt(id) } });
-      return reply.code(204).send();
     },
   );
 }

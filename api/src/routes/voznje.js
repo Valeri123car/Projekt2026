@@ -14,33 +14,15 @@ export default async function voznje(app) {
     "/",
     {
       onRequest: [app.authenticate],
-      schema: {
-        description: "Vrni vse vožnje prijavljenega voznika",
-      },
+      schema: { description: "Vrni vse vožnje prijavljenega voznika" },
     },
     async (request) => {
       return app.prisma.voznja.findMany({
         where: { fk_uporabnik: request.user.id },
         orderBy: { datum: "desc" },
-        select: {
-          id_voznja: true,
-          datum: true,
-          zacetek: true,
-          konc: true,
+        include: {
+          vozilo: { include: { tip_vozila: true } },
           stranka: true,
-          relacija: true,
-          opis: true,
-          placano: true,
-          fk_urnik: true,
-          timestamp_zapis: true,
-          fk_uporabnik: true,
-          urnik: {
-            select: {
-              id_urnik: true,
-              naziv: true,
-              datum: true,
-            },
-          },
         },
       });
     },
@@ -58,11 +40,13 @@ export default async function voznje(app) {
             datum: { type: "string", format: "date" },
             zacetek: { type: "string" },
             konc: { type: "string" },
-            stranka: { type: "string" },
+            stranka_ime: { type: "string" },
             relacija: { type: "string" },
             opis: { type: "string" },
             placano: { type: "boolean" },
-            fk_urnik: { type: "integer" },
+            cena: { type: "number" },
+            fk_vozilo: { type: "integer" },
+            fk_stranka: { type: "integer" },
           },
         },
       },
@@ -72,11 +56,13 @@ export default async function voznje(app) {
         datum,
         zacetek,
         konc,
-        stranka,
+        stranka_ime,
         relacija,
         opis,
         placano,
-        fk_urnik,
+        cena,
+        fk_vozilo,
+        fk_stranka,
       } = request.body;
 
       const voznja = await app.prisma.voznja.create({
@@ -85,11 +71,13 @@ export default async function voznje(app) {
           zacetek: new Date(zacetek),
           konc: new Date(konc),
           fk_uporabnik: request.user.id,
-          stranka: stranka || null,
+          stranka_ime: stranka_ime || null,
           relacija: relacija || null,
           opis: opis || null,
           placano: placano ?? false,
-          fk_urnik: fk_urnik || null,
+          cena: cena ?? null,
+          fk_vozilo: fk_vozilo || null,
+          fk_stranka: fk_stranka || null,
           timestamp_zapis: new Date(),
         },
       });
@@ -122,10 +110,7 @@ export default async function voznje(app) {
       const voznja = await app.prisma.voznja.findUnique({
         where: { id_voznja: id },
       });
-
-      if (!voznja) {
-        return reply.code(404).send({ error: "Vožnja ne obstaja" });
-      }
+      if (!voznja) return reply.code(404).send({ error: "Vožnja ne obstaja" });
 
       if (voznja.fk_uporabnik !== request.user.id && request.user.vloga !== 2) {
         return reply.code(403).send({ error: "Dostop zavrnjen" });
@@ -150,17 +135,13 @@ export default async function voznje(app) {
       const voznja = await app.prisma.voznja.findUnique({
         where: { id_voznja: id },
       });
-
-      if (!voznja) {
-        return reply.code(404).send({ error: "Vožnja ne obstaja" });
-      }
+      if (!voznja) return reply.code(404).send({ error: "Vožnja ne obstaja" });
 
       if (voznja.fk_uporabnik !== request.user.id && request.user.vloga !== 2) {
         return reply.code(403).send({ error: "Dostop zavrnjen" });
       }
 
       await app.prisma.voznja.delete({ where: { id_voznja: id } });
-
       return reply.code(204).send();
     },
   );
@@ -201,7 +182,7 @@ export default async function voznje(app) {
       const monthToDate = new Date(doDate);
       monthToDate.setHours(23, 59, 59, 999);
 
-      let izpis = [];
+      const izpis = [];
 
       for (const id of voznikIds) {
         const zapisi = await app.prisma.tahografZapis.findMany({

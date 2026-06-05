@@ -7,7 +7,7 @@ import useAuthStore from "../store/authStore";
 const ITEMS_PER_PAGE = 20;
 
 const HEADERS_VOZNIK = ["Začetek", "Konec", "Trajanje", "Relacija", "Stranka", "Opis", "Plačano"];
-const HEADERS_ADMIN  = ["Voznik", "Začetek", "Konec", "Trajanje", "Relacija", "Stranka", "Opis", "Plačano", "Prevoz"];
+const HEADERS_ADMIN  = ["Voznik", "Začetek", "Konec", "Trajanje", "Relacija", "Stranka", "Opis", "Plačano"];
 
 function formatDateTime(dateString) {
   const date = new Date(dateString);
@@ -44,19 +44,6 @@ function izracunajVoznjePoMesecih(voznje) {
     }));
 }
 
-function buildKonvertiraneSet(voznjeData, urnikData) {
-  const konvertirane = new Set();
-  for (const v of voznjeData) {
-    const vDatum = new Date(v.datum || v.zacetek).toISOString().slice(0, 10);
-    const match  = urnikData.find((u) => {
-      const uDatum = new Date(u.datum).toISOString().slice(0, 10);
-      return uDatum === vDatum && u.fk_uporabnik === v.fk_uporabnik;
-    });
-    if (match) konvertirane.add(v.id_voznja);
-  }
-  return konvertirane;
-}
-
 function applyFiltersAndSort(voznje, { filterDateFrom, filterDateTo, filterVoznik, sortBy }) {
   let filtered = [...voznje];
 
@@ -83,147 +70,22 @@ function applyFiltersAndSort(voznje, { filterDateFrom, filterDateTo, filterVozni
   return filtered;
 }
 
-function KonvertirajVPrevozModal({ voznja, onClose, onSaved }) {
-  const [cena, setCena]                       = useState("");
-  const [vsiStranke, setVsiStranke]           = useState([]);
-  const [vsiVozila, setVsiVozila]             = useState([]);
-  const [selectedVozilo, setSelectedVozilo]   = useState("");
-  const [selectedStranka, setSelectedStranka] = useState("");
-  const [saving, setSaving]                   = useState(false);
-  const [error, setError]                     = useState(null);
-
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const [strankeRes, vozilaRes] = await Promise.all([
-          api.get("/admin/stranke"),
-          api.get("/admin/vozila"),
-        ]);
-        setVsiStranke(strankeRes.data || []);
-        setVsiVozila(vozilaRes.data || []);
-        const match = (strankeRes.data || []).find(
-          (s) => s.naziv.toLowerCase() === (voznja.stranka || "").toLowerCase()
-        );
-        if (match) setSelectedStranka(String(match.id_stranka));
-      } catch (e) {
-        console.error(e);
-      }
-    };
-    load();
-  }, []);
-
-  const handleSubmit = async () => {
-    if (!selectedVozilo) return setError("Izberite vozilo.");
-    if (!selectedStranka) return setError("Izberite stranko.");
-    try {
-      setSaving(true);
-      setError(null);
-      const urnikRes = await api.post("/admin/urnik", {
-        datum:        voznja.datum || voznja.zacetek,
-        naziv:        voznja.relacija || voznja.opis || null,
-        cena:         cena !== "" ? parseFloat(cena) : null,
-        placano:      false,
-        fk_vozilo:    parseInt(selectedVozilo),
-        fk_uporabnik: voznja.fk_uporabnik,
-        fk_stranka:   parseInt(selectedStranka),
-      });
-      await api.patch(`/voznje/${voznja.id_voznja}/placano`, { placano: false });
-      await api.put(`/admin/voznje/${voznja.id_voznja}/urnik`, { fk_urnik: urnikRes.data.id_urnik }).catch(() => {});
-      onSaved();
-    } catch (e) {
-      setError(e.response?.data?.error || "Napaka pri shranjevanju.");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onClose}>
-      <div className="w-full max-w-sm rounded-2xl bg-white shadow-2xl" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
-          <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined rounded-lg bg-emerald-50 p-2 text-emerald-600">receipt_long</span>
-            <div>
-              <h2 className="text-base font-semibold text-slate-900">Dodaj v prevoz</h2>
-              <p className="text-xs text-slate-500">{voznja.relacija || "-"} · {voznja.stranka || "-"}</p>
-            </div>
-          </div>
-          <button type="button" onClick={onClose} className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-100">
-            <span className="material-symbols-outlined text-[20px]">close</span>
-          </button>
-        </div>
-
-        <div className="px-6 py-5 space-y-4">
-          {error && (
-            <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">{error}</div>
-          )}
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Stranka *</label>
-            <select value={selectedStranka} onChange={(e) => setSelectedStranka(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">— Izberite stranko —</option>
-              {vsiStranke.map((s) => (
-                <option key={s.id_stranka} value={String(s.id_stranka)}>{s.naziv}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Vozilo *</label>
-            <select value={selectedVozilo} onChange={(e) => setSelectedVozilo(e.target.value)}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500">
-              <option value="">— Izberite vozilo —</option>
-              {vsiVozila.map((v) => (
-                <option key={v.id_vozilo} value={String(v.id_vozilo)}>{v.registerska} · {v.tip_vozila?.naziv ?? "—"}</option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-slate-500">Cena (€)</label>
-            <input type="number" min="0" step="0.01" value={cena} onChange={(e) => setCena(e.target.value)}
-              placeholder="0.00"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          <div className="rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-500 space-y-1">
-            <p>Datum: <span className="font-medium text-slate-700">{new Date(voznja.datum || voznja.zacetek).toLocaleDateString("sl-SI")}</span></p>
-            <p>Voznik: <span className="font-medium text-slate-700">{voznja.uporabnik ? `${voznja.uporabnik.ime} ${voznja.uporabnik.priimek}` : `#${voznja.fk_uporabnik}`}</span></p>
-            {voznja.relacija && <p>Relacija: <span className="font-medium text-slate-700">{voznja.relacija}</span></p>}
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 border-t border-slate-200 px-6 py-4">
-          <button type="button" onClick={onClose}
-            className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50">
-            Prekliči
-          </button>
-          <button type="button" onClick={handleSubmit} disabled={saving}
-            className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:opacity-60">
-            <span className="material-symbols-outlined text-[16px]">add_road</span>
-            {saving ? "Shranjujem..." : "Dodaj v prevoz"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 export default function Voznje() {
   const vloga    = useAuthStore((s) => s.vloga);
   const isVoznik = vloga === 1;
 
-  const [voznje, setVoznje]                     = useState([]);
-  const [filteredVoznje, setFilteredVoznje]     = useState([]);
-  const [konvertiraneIds, setKonvertiraneIds]   = useState(new Set());
-  const [allVozniki, setAllVozniki]             = useState([]);
-  const [loading, setLoading]                   = useState(true);
-  const [error, setError]                       = useState(null);
-  const [uploadLoading, setUploadLoading]       = useState(false);
-  const [exportLoading, setExportLoading]       = useState(false);
-  const [uploadSuccess, setUploadSuccess]       = useState(false);
-  const [selectedFile, setSelectedFile]         = useState(null);
-  const [currentPage, setCurrentPage]           = useState(1);
-  const [activeTab, setActiveTab]               = useState("voznje");
-  const [konvertiraiModal, setKonvertiraiModal] = useState(null);
-  const [placanoLoading, setPlacanoLoading]     = useState(null);
+  const [voznje, setVoznje]                 = useState([]);
+  const [filteredVoznje, setFilteredVoznje] = useState([]);
+  const [allVozniki, setAllVozniki]         = useState([]);
+  const [loading, setLoading]               = useState(true);
+  const [error, setError]                   = useState(null);
+  const [uploadLoading, setUploadLoading]   = useState(false);
+  const [exportLoading, setExportLoading]   = useState(false);
+  const [uploadSuccess, setUploadSuccess]   = useState(false);
+  const [selectedFile, setSelectedFile]     = useState(null);
+  const [currentPage, setCurrentPage]       = useState(1);
+  const [activeTab, setActiveTab]           = useState("voznje");
+  const [placanoLoading, setPlacanoLoading] = useState(null);
 
   const [filterDateFrom, setFilterDateFrom] = useState("");
   const [filterDateTo, setFilterDateTo]     = useState("");
@@ -250,12 +112,8 @@ export default function Voznje() {
     try {
       setLoading(true);
       setError(null);
-      const [voznjeRes, urnikRes] = await Promise.all([
-        api.get(isVoznik ? "/voznje" : "/admin/voznje"),
-        isVoznik ? Promise.resolve({ data: [] }) : api.get("/admin/urnik").catch(() => ({ data: [] })),
-      ]);
-      setVoznje(voznjeRes.data);
-      setKonvertiraneIds(buildKonvertiraneSet(voznjeRes.data, urnikRes.data));
+      const res = await api.get(isVoznik ? "/voznje" : "/admin/voznje");
+      setVoznje(res.data);
     } catch (err) {
       setError(err.response?.data?.error || "Napaka pri nalaganju vožnj");
     } finally {
@@ -295,18 +153,18 @@ export default function Voznje() {
     try {
       setExportLoading(true);
       const [year, month] = selectedExportMonth.split("-").map(Number);
-      const monthStr  = String(month).padStart(2, "0");
-      const firstDay  = `${year}-${monthStr}-01`;
-      const lastDay   = `${year}-${monthStr}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
-      const params    = new URLSearchParams();
+      const monthStr = String(month).padStart(2, "0");
+      const firstDay = `${year}-${monthStr}-01`;
+      const lastDay  = `${year}-${monthStr}-${String(new Date(year, month, 0).getDate()).padStart(2, "0")}`;
+      const params   = new URLSearchParams();
       selectedExportVozniki.forEach((id) => params.append("fk_uporabnik", id));
       params.append("od", firstDay);
       params.append("do", lastDay);
-      const response  = await api.get(`/voznje/voznjeMesec/export?${params.toString()}`, { responseType: "blob" });
-      const url       = URL.createObjectURL(response.data);
-      const a         = document.createElement("a");
-      a.href          = url;
-      a.download      = `delovni_zapis_${firstDay}_${lastDay}.xlsx`;
+      const response = await api.get(`/voznje/voznjeMesec/export?${params.toString()}`, { responseType: "blob" });
+      const url      = URL.createObjectURL(response.data);
+      const a        = document.createElement("a");
+      a.href         = url;
+      a.download     = `delovni_zapis_${firstDay}_${lastDay}.xlsx`;
       a.click();
       URL.revokeObjectURL(url);
     } catch (err) {
@@ -339,6 +197,8 @@ export default function Voznje() {
     }
   };
 
+  const strankaLabel = (v) => v.stranka?.naziv ?? v.stranka_ime ?? "-";
+
   const voznjePoMesecih = izracunajVoznjePoMesecih(voznje);
   const maxVoznje       = Math.max(1, ...voznjePoMesecih.map((m) => m.stevilo));
   const totalPages      = Math.ceil(filteredVoznje.length / ITEMS_PER_PAGE) || 1;
@@ -346,14 +206,6 @@ export default function Voznje() {
   return (
     <div className="flex">
       <Sidebar />
-
-      {konvertiraiModal && (
-        <KonvertirajVPrevozModal
-          voznja={konvertiraiModal}
-          onClose={() => setKonvertiraiModal(null)}
-          onSaved={() => { setKonvertiraiModal(null); fetchVoznje(); }}
-        />
-      )}
 
       <main className="ml-72 flex-1 p-8 bg-gray-50 min-h-screen">
         <div className="mb-6">
@@ -452,7 +304,6 @@ export default function Voznje() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
                     <option value="datum-desc">Datum (najnovejše)</option>
                     <option value="datum-asc">Datum (najstarejše)</option>
-                    <option value="stranka-asc">Stranka (A-Z)</option>
                   </select>
                 </div>
                 <div className="flex items-end">
@@ -507,7 +358,7 @@ export default function Voznje() {
                         <td className="px-6 py-4 text-sm text-gray-700">{formatDateTime(v.konc)}</td>
                         <td className="px-6 py-4 text-sm text-gray-700">{izracunajTrajanje(v.zacetek, v.konc)}</td>
                         <td className="px-6 py-4 text-sm text-gray-700">{v.relacija || "-"}</td>
-                        <td className="px-6 py-4 text-sm text-gray-700">{v.stranka || "-"}</td>
+                        <td className="px-6 py-4 text-sm text-gray-700">{strankaLabel(v)}</td>
                         <td className="px-6 py-4 text-sm text-gray-700 max-w-xs truncate">{v.opis || "-"}</td>
                         <td className="px-6 py-4">
                           <button
@@ -524,27 +375,6 @@ export default function Voznje() {
                             {v.placano ? "Plačano" : "Neplačano"}
                           </button>
                         </td>
-                        {!isVoznik && (
-                          <td className="px-6 py-4">
-                            {v.urnik ? (
-                              <span className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
-                                <span className="material-symbols-outlined text-[14px]">link</span>
-                                {v.urnik.naziv || new Date(v.urnik.datum).toLocaleDateString("sl-SI")}
-                              </span>
-                            ) : konvertiraneIds.has(v.id_voznja) ? (
-                              <span className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-400">
-                                <span className="material-symbols-outlined text-[14px]">check_circle</span>
-                                V prevozih
-                              </span>
-                            ) : (
-                              <button type="button" onClick={() => setKonvertiraiModal(v)}
-                                className="inline-flex items-center gap-1.5 rounded-lg border border-emerald-300 bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700 hover:bg-emerald-100 whitespace-nowrap">
-                                <span className="material-symbols-outlined text-[14px]">receipt_long</span>
-                                Prevoz
-                              </button>
-                            )}
-                          </td>
-                        )}
                       </tr>
                     ))}
                   </tbody>
