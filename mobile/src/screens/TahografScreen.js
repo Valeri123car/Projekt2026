@@ -9,7 +9,7 @@ import {
   RefreshControl,
   Alert,
   Modal,
-  TextInput,
+  FlatList,
 } from "react-native";
 import { MaterialCommunityIcons } from "@expo/vector-icons";
 import api from "../api/client";
@@ -19,7 +19,6 @@ import {
   izbrisiAktivnoLokalno,
   dodajCakajoci,
   preberiCakajoche,
-  izbrisiCakajoche,
 } from "../store/tahografCache";
 import { useSinhronizacija } from "../hooks/useSinhronizacija";
 
@@ -90,9 +89,21 @@ export default function TahografScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [menjiLoading, setMenjiLoading] = useState(false);
-  const [registrskaModal, setRegistrskaModal] = useState(false);
-  const [registrskaVnos, setRegistrskaVnos] = useState("");
+  const [vozilaModal, setVozilaModal] = useState(false);
+  const [vozilaList, setVozilaList] = useState([]);
   const [cakajociStanje, setCakajociStanje] = useState(null);
+
+  useEffect(() => {
+    const naloziVozila = async () => {
+      try {
+        const res = await api.get("/vozila");
+        setVozilaList(res.data || []);
+      } catch {
+        setVozilaList([]);
+      }
+    };
+    naloziVozila();
+  }, []);
 
   const naloziPodatke = useCallback(async () => {
     const cakajoci = await preberiCakajoche();
@@ -188,8 +199,7 @@ export default function TahografScreen() {
     const zahtevaTablica = novoStanje === "VOZNJA" || novoStanje === "DELO";
     if (zahtevaTablica && !aktivno?.registrska) {
       setCakajociStanje(novoStanje);
-      setRegistrskaVnos("");
-      setRegistrskaModal(true);
+      setVozilaModal(true);
     } else {
       await izvediZamenjavo(novoStanje, aktivno?.registrska || null);
     }
@@ -497,49 +507,69 @@ export default function TahografScreen() {
       )}
 
       <Modal
-        visible={registrskaModal}
+        visible={vozilaModal}
         transparent
-        animationType="fade"
-        onRequestClose={() => setRegistrskaModal(false)}
+        animationType="slide"
+        onRequestClose={() => setVozilaModal(false)}
       >
         <View style={s.modalOverlay}>
           <View style={s.modalKartica}>
-            <Text style={s.modalNaslov}>Registrska številka</Text>
-            <Text style={s.modalPodnaslov}>
-              Vnesite registrsko številko vozila (opcijsko)
-            </Text>
-            <TextInput
-              style={s.modalInput}
-              value={registrskaVnos}
-              onChangeText={setRegistrskaVnos}
-              placeholder="npr. CE 86-VSI"
-              placeholderTextColor="#9e9e9e"
-              autoCapitalize="characters"
-              autoFocus
-            />
-            <View style={s.modalGumbi}>
-              <TouchableOpacity
-                style={s.modalGumbPreskoči}
-                onPress={() => {
-                  setRegistrskaModal(false);
-                  izvediZamenjavo(cakajociStanje, null);
-                }}
-              >
-                <Text style={s.modalGumbPreskočiTxt}>Preskoči</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={s.modalGumbPotrdi}
-                onPress={() => {
-                  setRegistrskaModal(false);
-                  izvediZamenjavo(
-                    cakajociStanje,
-                    registrskaVnos.trim() || null,
-                  );
-                }}
-              >
-                <Text style={s.modalGumbPotrdiTxt}>Potrdi</Text>
+            <View style={s.modalHeader}>
+              <Text style={s.modalNaslov}>Izberi vozilo</Text>
+              <TouchableOpacity onPress={() => setVozilaModal(false)}>
+                <MaterialCommunityIcons
+                  name="close"
+                  size={22}
+                  color="#424754"
+                />
               </TouchableOpacity>
             </View>
+            <Text style={s.modalPodnaslov}>Izberite vozilo za to stanje</Text>
+            <FlatList
+              data={vozilaList}
+              keyExtractor={(item) => String(item.id_vozilo)}
+              style={{ maxHeight: 300 }}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={s.modalItem}
+                  onPress={() => {
+                    setVozilaModal(false);
+                    izvediZamenjavo(cakajociStanje, item.registerska);
+                  }}
+                >
+                  <MaterialCommunityIcons
+                    name="bus"
+                    size={20}
+                    color="#0058be"
+                  />
+                  <View style={{ flex: 1 }}>
+                    <Text style={s.modalItemTxt}>{item.registerska}</Text>
+                    {item.tip_vozila?.naziv && (
+                      <Text style={s.modalItemSub}>
+                        {item.tip_vozila.naziv}
+                      </Text>
+                    )}
+                  </View>
+                  <MaterialCommunityIcons
+                    name="chevron-right"
+                    size={18}
+                    color="#c2c6d6"
+                  />
+                </TouchableOpacity>
+              )}
+              ListEmptyComponent={
+                <Text style={s.modalPrazno}>Ni vozil v sistemu</Text>
+              }
+            />
+            <TouchableOpacity
+              style={s.modalGumbPreskoči}
+              onPress={() => {
+                setVozilaModal(false);
+                izvediZamenjavo(cakajociStanje, null);
+              }}
+            >
+              <Text style={s.modalGumbPreskočiTxt}>Preskoči (brez vozila)</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -553,11 +583,9 @@ const s = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#f9f9ff" },
   scroll: { padding: 16 },
   center: { flex: 1, alignItems: "center", justifyContent: "center" },
-
   header: { paddingTop: 52, paddingBottom: 16 },
   headerNaslov: { fontSize: 28, fontWeight: "800", color: "#191b23" },
   headerPodnaslov: { fontSize: 12, color: "#727785", marginTop: 2 },
-
   aktivnaKartica: {
     backgroundColor: "#fff",
     borderRadius: 14,
@@ -598,7 +626,6 @@ const s = StyleSheet.create({
     gap: 6,
   },
   zakljuciBtnTxt: { fontSize: 13, fontWeight: "600" },
-
   sekcijaNaslov: {
     fontSize: 11,
     fontWeight: "700",
@@ -607,7 +634,6 @@ const s = StyleSheet.create({
     marginBottom: 10,
     marginTop: 4,
   },
-
   stanjaGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -634,7 +660,6 @@ const s = StyleSheet.create({
     top: 8,
     right: 8,
   },
-
   povzetekGrid: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -653,7 +678,6 @@ const s = StyleSheet.create({
   },
   povzetekLabel: { fontSize: 11, color: "#727785", fontWeight: "600" },
   povzetekVrednost: { fontSize: 18, fontWeight: "700", marginTop: 2 },
-
   limitKartica: {
     backgroundColor: "#fff",
     borderRadius: 12,
@@ -686,7 +710,6 @@ const s = StyleSheet.create({
     marginTop: 8,
   },
   opozoriloBesedilo: { fontSize: 12, color: "#ba1a1a", fontWeight: "600" },
-
   odmorKartica: {
     backgroundColor: "#fff8f0",
     borderRadius: 12,
@@ -703,10 +726,8 @@ const s = StyleSheet.create({
   },
   odmorNaslov: { fontSize: 14, fontWeight: "700", color: "#855300" },
   odmorBesedilo: { fontSize: 12, color: "#855300" },
-
   prazno: { alignItems: "center", padding: 24, gap: 8 },
   praznoTxt: { color: "#727785", fontSize: 14 },
-
   zapisVrstica: {
     backgroundColor: "#fff",
     borderRadius: 10,
@@ -737,53 +758,50 @@ const s = StyleSheet.create({
   zapisDesno: { alignItems: "flex-end", gap: 4 },
   zapisTrajanje: { fontSize: 13, fontWeight: "600", color: "#424754" },
   aktivnaPikaMala: { width: 7, height: 7, borderRadius: 4 },
-
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
-    alignItems: "center",
-    justifyContent: "center",
-    padding: 24,
+    justifyContent: "flex-end",
   },
   modalKartica: {
     backgroundColor: "#fff",
-    borderRadius: 16,
-    padding: 24,
-    width: "100%",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingBottom: 32,
   },
-  modalNaslov: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#191b23",
-    marginBottom: 6,
+  modalHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#e1e2ec",
   },
-  modalPodnaslov: { fontSize: 13, color: "#727785", marginBottom: 16 },
-  modalInput: {
-    borderWidth: 1.5,
-    borderColor: "#c2c6d6",
-    borderRadius: 10,
-    padding: 12,
-    fontSize: 16,
-    color: "#191b23",
-    marginBottom: 20,
-    letterSpacing: 1,
+  modalNaslov: { fontSize: 16, fontWeight: "700", color: "#191b23" },
+  modalPodnaslov: {
+    fontSize: 13,
+    color: "#727785",
+    paddingHorizontal: 16,
+    paddingTop: 10,
   },
-  modalGumbi: { flexDirection: "row", gap: 12 },
+  modalItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: "#f2f3fd",
+  },
+  modalItemTxt: { fontSize: 15, fontWeight: "600", color: "#191b23" },
+  modalItemSub: { fontSize: 12, color: "#727785", marginTop: 1 },
+  modalPrazno: { padding: 20, textAlign: "center", color: "#727785" },
   modalGumbPreskoči: {
-    flex: 1,
+    margin: 16,
     borderWidth: 1.5,
     borderColor: "#c2c6d6",
     borderRadius: 10,
-    padding: 12,
+    padding: 14,
     alignItems: "center",
   },
   modalGumbPreskočiTxt: { fontSize: 14, fontWeight: "600", color: "#727785" },
-  modalGumbPotrdi: {
-    flex: 1,
-    backgroundColor: "#0058be",
-    borderRadius: 10,
-    padding: 12,
-    alignItems: "center",
-  },
-  modalGumbPotrdiTxt: { fontSize: 14, fontWeight: "700", color: "#fff" },
 });
