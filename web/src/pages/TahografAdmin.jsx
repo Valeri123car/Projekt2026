@@ -381,8 +381,8 @@ export default function TahografAdmin() {
             <select value={filters.vir} onChange={(e) => setFilter("vir", e.target.value)}
               className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
               <option value="">Vsi viri</option>
-              <option value="UVOZ">Uvoz (DDD/Excel)</option>
-              <option value="ROCNO">Ročno</option>
+              <option value="UVOZ">Uvoz</option>
+              <option value="POSNETO">Posneto</option>
             </select>
           </div>
           <div>
