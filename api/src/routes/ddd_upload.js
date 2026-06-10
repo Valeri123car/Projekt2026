@@ -52,7 +52,7 @@ function resolveScriptArgs(filename, tempFilePath) {
     return {
       fileType: "Excel",
       script: "readExcelFile.py",
-      args: [tempFilePath],
+      args: [tempFilePath, "", "--db"],
     };
   }
   return null;
@@ -176,33 +176,34 @@ export default async function dddUpload(app) {
           );
         tempFilePath = null;
 
-        const user = await findUser(app.prisma, parsedData.voznik);
-        if (!user) {
+        const drivers = parsedData.drivers ?? [{ voznik: parsedData.voznik, records: parsedData.records }];
+        let totalSaved = 0;
+        const notFound = [];
+
+        for (const driver of drivers) {
+          const user = await findUser(app.prisma, driver.voznik);
+          if (!user) {
+            notFound.push(driver.voznik);
+            continue;
+          }
+          await saveVoznje(app.prisma, driver.records, user.id_uporabnik);
+          totalSaved += driver.records.length;
+        }
+
+        if (totalSaved === 0 && notFound.length > 0) {
           return reply.code(404).send({
-            error: "Uporabnik ni najden",
-            details: `Uporabnik z imenom "${parsedData.voznik}" ne obstaja v bazi`,
+            error: "Nobeden od voznikov ni najden v bazi",
+            details: `Vozniki niso najdeni: ${notFound.join(", ")}`,
           });
         }
 
-        const voznje = parsedData.records;
-
-        try {
-          await saveVoznje(app.prisma, voznje, user.id_uporabnik);
-          return reply.code(201).send({
-            success: true,
-            message: `${scriptInfo.fileType} datoteka uspešno parsirana`,
-            fileType: scriptInfo.fileType,
-            summary: { total: voznje.length, saved: voznje.length, failed: 0 },
-            failures: null,
-            data: parsedData,
-          });
-        } catch (error) {
-          return reply.code(400).send({
-            error:
-              "Napaka pri shranjevanju vozanj - nobena voznja ni bila shranjena",
-            details: error.message,
-          });
-        }
+        return reply.code(201).send({
+          success: true,
+          message: `${scriptInfo.fileType} datoteka uspešno parsirana`,
+          fileType: scriptInfo.fileType,
+          summary: { total: totalSaved, saved: totalSaved, notFound },
+          data: parsedData,
+        });
       } catch (error) {
         if (tempFilePath) {
           await fs.unlink(tempFilePath).catch(() => {});
