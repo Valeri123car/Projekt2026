@@ -6,7 +6,7 @@ import { useAuth } from '../hooks/useAuth';
 const ITEMS_PER_PAGE = 8;
 
 const DOSTOP_OPTIONS = [
-  { value: 1, label: 'VOZNIK',  color: 'bg-emerald-100 text-emerald-700', icon: 'car_spark',             iconBg: 'bg-emerald-50 text-emerald-600' },
+  { value: 1, label: 'VOZNIK',  color: 'bg-emerald-100 text-emerald-700', icon: 'directions_car',             iconBg: 'bg-emerald-50 text-emerald-600' },
   { value: 2, label: 'ADMIN',   color: 'bg-amber-100 text-amber-800',     icon: 'deployed_code_account', iconBg: 'bg-amber-50 text-amber-600' },
   { value: 3, label: 'VODSTVO', color: 'bg-orange-100 text-orange-700',   icon: 'support_agent',         iconBg: 'bg-orange-50 text-orange-600' },
 ];

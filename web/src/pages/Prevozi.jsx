@@ -49,14 +49,33 @@ function validatePrevoz(datum, selectedVoznik) {
   return null;
 }
 
+const RELACIJA_SEPARATORS = [' -> ', '->', ' → ', '→'];
+
+function splitRelacijaForEdit(relacija) {
+  if (!relacija || typeof relacija !== 'string') return { relacijaOd: '', relacijaDo: '' };
+  for (const sep of RELACIJA_SEPARATORS) {
+    const idx = relacija.indexOf(sep);
+    if (idx !== -1) {
+      return {
+        relacijaOd: relacija.slice(0, idx).trim(),
+        relacijaDo: relacija.slice(idx + sep.length).trim(),
+      };
+    }
+  }
+  return { relacijaOd: relacija.trim(), relacijaDo: '' };
+}
+
 function buildPrevozPayload(fields) {
-  const { datum, uraZacetek, uraKonec, relacija, opis, cena, placano, selectedVozilo, selectedStranka, selectedVoznik } = fields;
+  const { datum, uraZacetek, uraKonec, relacijaOd, relacijaDo, opis, cena, placano, selectedVozilo, selectedStranka, selectedVoznik } = fields;
   const { zacetek, konc } = buildTimestamps(datum, uraZacetek, uraKonec);
+  const od = relacijaOd.trim();
+  const cilj = relacijaDo.trim();
+  const relacija = od && cilj ? `${od} → ${cilj}` : (od || cilj || undefined);
   return {
     datum,
     zacetek,
     konc,
-    relacija:     relacija    || undefined,
+    relacija,
     opis:         opis        || undefined,
     cena:         cena !== '' ? parseFloat(cena) : undefined,
     placano,
@@ -71,7 +90,7 @@ function getEditInitialState(prevoz) {
     datum:            toInputDate(prevoz.datum),
     uraZacetek:       toInputTime(prevoz.zacetek),
     uraKonec:         toInputTime(prevoz.konc),
-    relacija:         prevoz.relacija  ?? '',
+    ...splitRelacijaForEdit(prevoz.relacija),
     opis:             prevoz.opis      ?? '',
     cena:             prevoz.cena      ?? '',
     placano:          prevoz.placano,
@@ -83,7 +102,7 @@ function getEditInitialState(prevoz) {
 
 const ADD_INITIAL_STATE = {
   datum: '', uraZacetek: '08:00', uraKonec: '16:00',
-  relacija: '', opis: '', cena: '', placano: false,
+  relacijaOd: '', relacijaDo: '', opis: '', cena: '', placano: false,
   selectedStranka: '', selectedVozilo: '', selectedVoznik: '',
 };
 
@@ -283,7 +302,8 @@ function usePrevozModal(mode, prevoz, onSaved) {
   const [datum, setDatum]                   = useState(init.datum);
   const [uraZacetek, setUraZacetek]         = useState(init.uraZacetek);
   const [uraKonec, setUraKonec]             = useState(init.uraKonec);
-  const [relacija, setRelacija]             = useState(init.relacija);
+  const [relacijaOd, setRelacijaOd]         = useState(init.relacijaOd);
+  const [relacijaDo, setRelacijaDo]         = useState(init.relacijaDo);
   const [opis, setOpis]                     = useState(init.opis);
   const [cena, setCena]                     = useState(init.cena);
   const [placano, setPlacano]               = useState(init.placano);
@@ -322,7 +342,7 @@ function usePrevozModal(mode, prevoz, onSaved) {
     if (validationError) { setError(validationError); return; }
     try {
       setSaving(true);
-      const body = buildPrevozPayload({ datum, uraZacetek, uraKonec, relacija, opis, cena, placano, selectedVozilo, selectedStranka, selectedVoznik });
+      const body = buildPrevozPayload({ datum, uraZacetek, uraKonec, relacijaOd, relacijaDo, opis, cena, placano, selectedVozilo, selectedStranka, selectedVoznik });
       await savePrevoz(isEdit, prevoz?.id_voznja, body);
       onSaved();
     } catch (e) {
@@ -337,7 +357,7 @@ function usePrevozModal(mode, prevoz, onSaved) {
 
   return {
     isEdit, datum, setDatum, uraZacetek, setUraZacetek, uraKonec, setUraKonec,
-    relacija, setRelacija, opis, setOpis, cena, setCena, placano, setPlacano,
+    relacijaOd, setRelacijaOd, relacijaDo, setRelacijaDo, opis, setOpis, cena, setCena, placano, setPlacano,
     selectedStranka, setSelectedStranka, selectedVozilo, setSelectedVozilo,
     selectedVoznik, setSelectedVoznik, novaStrankaOpen, setNovaStrankaOpen,
     novaStrankaData, setNovaStrankaData, novaStrankaSaving,
@@ -440,11 +460,19 @@ function PrevozModal({ mode, prevoz, onClose, onSaved }) {
             )}
           </div>
 
-          <div>
-            <label className="mb-1 block text-xs font-medium text-slate-600">Relacija</label>
-            <input value={m.relacija} onChange={(e) => m.setRelacija(e.target.value)}
-              placeholder="npr. Ljubljana → Maribor"
-              className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Relacija – Od</label>
+              <input value={m.relacijaOd} onChange={(e) => m.setRelacijaOd(e.target.value)}
+                placeholder="npr. Ljubljana"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
+            <div>
+              <label className="mb-1 block text-xs font-medium text-slate-600">Relacija – Do</label>
+              <input value={m.relacijaDo} onChange={(e) => m.setRelacijaDo(e.target.value)}
+                placeholder="npr. Maribor"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+            </div>
           </div>
 
           <div>
