@@ -11,9 +11,25 @@ import { MaterialCommunityIcons } from "@expo/vector-icons";
 import { useState } from "react";
 import api from "../api/client";
 
+function resolveStranka(stranka) {
+  if (!stranka) return "—";
+  if (typeof stranka === "string") return stranka;
+  if (typeof stranka === "object") return stranka.naziv || "—";
+  return "—";
+}
+
+function resolveRelacija(relacija) {
+  if (!relacija) return "—";
+  return String(relacija);
+}
+
+function resolveOpis(opis) {
+  if (!opis) return "—";
+  return String(opis);
+}
+
 export default function VoznjaDetailScreen({ route, navigation }) {
   const { voznja } = route.params;
-  console.log("VOZNJA PODATKI:", JSON.stringify(voznja));
   const [loading, setLoading] = useState(false);
 
   const izbrisi = () => {
@@ -57,6 +73,10 @@ export default function VoznjaDetailScreen({ route, navigation }) {
   const trajH = Math.floor(trajMin / 60);
   const trajM = trajMin % 60;
   const trajanje = trajH > 0 ? `${trajH}h ${trajM}min` : `${trajM}min`;
+
+  const strankaIme = resolveStranka(voznja.stranka ?? voznja.stranka_ime);
+  const relacija = resolveRelacija(voznja.relacija);
+  const opis = resolveOpis(voznja.opis);
 
   return (
     <ScrollView style={s.container} contentContainerStyle={s.scroll}>
@@ -108,7 +128,7 @@ export default function VoznjaDetailScreen({ route, navigation }) {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.vrsticaOznaka}>Stranka</Text>
-            <Text style={s.vrsticaVrednost}>{voznja.stranka || "—"}</Text>
+            <Text style={s.vrsticaVrednost}>{strankaIme}</Text>
           </View>
         </View>
 
@@ -124,7 +144,7 @@ export default function VoznjaDetailScreen({ route, navigation }) {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.vrsticaOznaka}>Relacija</Text>
-            <Text style={s.vrsticaVrednost}>{voznja.relacija || "—"}</Text>
+            <Text style={s.vrsticaVrednost}>{relacija}</Text>
           </View>
         </View>
 
@@ -140,7 +160,7 @@ export default function VoznjaDetailScreen({ route, navigation }) {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={s.vrsticaOznaka}>Opis</Text>
-            <Text style={s.vrsticaVrednost}>{voznja.opis || "—"}</Text>
+            <Text style={s.vrsticaVrednost}>{opis}</Text>
           </View>
         </View>
 
